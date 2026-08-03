@@ -1,0 +1,132 @@
+@import "tailwindcss";
+
+/* Enable class-based dark mode for Tailwind CSS v4 */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --bg-main: #fefce8; /* Soft warm ivory canvas */
+    --card-bg: #ffffff;
+    --border-color: #000000;
+    --shadow-color: #000000;
+    --text-main: #0f172a; /* Slate 900 */
+    --text-muted: #475569;
+  }
+
+  .dark {
+    --bg-main: #090d16; /* Deep dark obsidian */
+    --card-bg: #0f172a; /* Slate 900 */
+    --border-color: #334155; /* Slate 700 */
+    --shadow-color: #000000;
+    --text-main: #ffffff; /* Pure white */
+    --text-muted: #cbd5e1; /* Slate 300 */
+  }
+}
+
+body {
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+  background: #facc15;
+  border-radius: 0px;
+}
+
+/* Neo-Brutalist Card Utility */
+.brutal-card {
+  background-color: var(--card-bg);
+  color: var(--text-main);
+  border: 2px solid var(--border-color);
+  border-radius: 0.75rem; /* 12px */
+  box-shadow: 4px 4px 0px 0px var(--shadow-color);
+  transition: all 0.15s ease;
+}
+
+.dark .brutal-card {
+  background-color: #0f172a;
+  color: #ffffff;
+  border-color: #334155;
+  box-shadow: 4px 4px 0px 0px #000000;
+}
+
+.brutal-dashed {
+  background-color: var(--card-bg);
+  color: var(--text-main);
+  border: 2px dashed var(--border-color);
+  border-radius: 0.75rem;
+  box-shadow: 3px 3px 0px 0px var(--shadow-color);
+  transition: all 0.15s ease;
+}
+
+.dark .brutal-dashed {
+  background-color: #0f172a;
+  color: #ffffff;
+  border-color: #334155;
+  box-shadow: 3px 3px 0px 0px #000000;
+}
+
+/* Neo-Brutalist Tactile Push Buttons */
+.brutal-btn-yellow {
+  background-color: #facc15;
+  color: #000000 !important;
+  border: 2px solid #000000;
+  box-shadow: 3px 3px 0px 0px #000000;
+  font-weight: 800;
+  transition: all 0.1s ease;
+}
+.brutal-btn-yellow:hover {
+  background-color: #fde047;
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0px 0px #000000;
+}
+.brutal-btn-yellow:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0px 0px 0px 0px #000000;
+}
+
+.brutal-btn-cyan {
+  background-color: #22d3ee;
+  color: #000000 !important;
+  border: 2px solid #000000;
+  box-shadow: 3px 3px 0px 0px #000000;
+  font-weight: 800;
+  transition: all 0.1s ease;
+}
+.brutal-btn-cyan:hover {
+  background-color: #67e8f9;
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0px 0px #000000;
+}
+.brutal-btn-cyan:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0px 0px 0px 0px #000000;
+}
+
+.brutal-btn-lime {
+  background-color: #a3e635;
+  color: #000000 !important;
+  border: 2px solid #000000;
+  box-shadow: 3px 3px 0px 0px #000000;
+  font-weight: 800;
+  transition: all 0.1s ease;
+}
+.brutal-btn-lime:hover {
+  background-color: #bef264;
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0px 0px #000000;
+}
+.brutal-btn-lime:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0px 0px 0px 0px #000000;
+}
