@@ -24,6 +24,23 @@ export function App() {
     recipientName: '',
   });
 
+  // Check URL query parameters for scanned QR verification codes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const verifyId = params.get('verify');
+      const recipient = params.get('name') || params.get('recipient') || 'Certificate Holder';
+
+      if (verifyId) {
+        setVerificationModal({
+          isOpen: true,
+          certId: verifyId,
+          recipientName: recipient,
+        });
+      }
+    }
+  }, []);
+
   // Toggle dark class on <html> document element
   useEffect(() => {
     const root = document.documentElement;

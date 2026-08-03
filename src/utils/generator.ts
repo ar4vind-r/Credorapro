@@ -123,14 +123,16 @@ export async function renderCertificateCanvas(
     const maxBoxHeightPx = (height / 100) * canvasHeight;
 
     if (mapping.type === 'qr_code') {
-      // Generate QR Code overlay
+      // Generate QR Code overlay pointing to live web app verification route
       const recipientName = getRowValue(row, mapping.columnName || 'name') || 'Recipient';
-      const verifyUrl = `https://verify.credora.app/${certId}?recipient=${encodeURIComponent(recipientName)}`;
+      const origin = typeof window !== 'undefined' && window.location.origin ? window.location.origin : 'https://credora.vercel.app';
+      const verifyUrl = `${origin}/?verify=${certId}&name=${encodeURIComponent(recipientName)}`;
 
       try {
+        const qrSizePx = Math.max(60, Math.min(maxBoxWidthPx, maxBoxHeightPx));
         const qrDataUrl = await QRCode.toDataURL(verifyUrl, {
           margin: 1,
-          width: Math.max(120, maxBoxWidthPx),
+          width: Math.round(qrSizePx * scaleFactor),
           color: { dark: '#000000', light: '#ffffff' },
         });
 
@@ -140,8 +142,9 @@ export async function renderCertificateCanvas(
           qrImg.src = qrDataUrl;
         });
 
-        const qrSize = Math.max(80, maxBoxWidthPx);
-        ctx.drawImage(qrImg, xPx, yPx, qrSize, qrSize);
+        const qrXpx = xPx + (maxBoxWidthPx - qrSizePx) / 2;
+        const qrYpx = yPx + (maxBoxHeightPx - qrSizePx) / 2;
+        ctx.drawImage(qrImg, qrXpx, qrYpx, qrSizePx, qrSizePx);
       } catch (err) {
         console.error('QR code generation error:', err);
       }
@@ -228,8 +231,6 @@ function buildFilename(
 
 /**
  * Batch generate certificates for all rows and bundle into a JSZip file.
- * Memory Optimized: Streams binary data directly into JSZip and caps preview items
- * to prevent browser 'Array buffer allocation failed' memory crashes on large datasets.
  */
 export async function batchGenerateCertificates(
   template: TemplateFile,
@@ -241,7 +242,7 @@ export async function batchGenerateCertificates(
   const zip = new JSZip();
   const certificates: GeneratedCert[] = [];
   const totalRows = spreadsheet.rows.length;
-  const MAX_PREVIEW_ITEMS = 24; // Limit heavy base64 preview thumbnails in RAM
+  const MAX_PREVIEW_ITEMS = 24;
 
   for (let i = 0; i < totalRows; i++) {
     const row = spreadsheet.rows[i];
@@ -282,7 +283,7 @@ export async function batchGenerateCertificates(
       fileBuffer = await res.arrayBuffer();
     }
 
-    // Add binary ArrayBuffer directly to ZIP (Zero redundant base64 copies)
+    // Add binary ArrayBuffer directly to ZIP
     zip.file(filename, fileBuffer);
 
     // Keep lightweight thumbnail objects for UI rendering
@@ -300,7 +301,6 @@ export async function batchGenerateCertificates(
         rowIndex: i,
       });
     } else {
-      // Memory stub for items past 24
       const fileBlob = new Blob([fileBuffer], {
         type: options.format === 'pdf' ? 'application/pdf' : options.format === 'jpg' ? 'image/jpeg' : 'image/png',
       });
@@ -310,7 +310,7 @@ export async function batchGenerateCertificates(
         recipientName,
         filename,
         blob: fileBlob,
-        dataUrl: '', // Omit heavy string from RAM
+        dataUrl: '',
         rowIndex: i,
       });
     }
