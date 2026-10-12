@@ -64,7 +64,7 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#fefce8] dark:bg-[#090d16] text-slate-900 dark:text-slate-100 transition-colors duration-200 font-sans selection:bg-yellow-300 selection:text-black">
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-150 font-sans selection:bg-yellow-400 selection:text-slate-950">
       
       {/* Top Brutalist Header Bar */}
       <Header
@@ -137,12 +137,12 @@ export function App() {
       />
 
       {/* Footer */}
-      <footer className="py-5 border-t-4 border-black dark:border-slate-800 bg-yellow-300 dark:bg-slate-900 text-black dark:text-white px-6 font-mono text-xs transition-colors">
+      <footer className="py-6 border-t-2 border-slate-900/10 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 px-6 font-mono text-xs transition-colors">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2 font-black">
-            <span>CREDORA</span> — BULK CERTIFICATE GENERATOR
+          <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white">
+            <span>CREDORA</span> — Bulk Certificate Studio
           </div>
-          <p className="font-bold">© 2026 CREDORA INC. 100% PRIVATE & BROWSER-LOCAL.</p>
+          <p className="font-medium">100% Client-Side & Private. All data remains in your browser.</p>
         </div>
       </footer>
 

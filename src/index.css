@@ -5,21 +5,23 @@
 
 @layer base {
   :root {
-    --bg-main: #fefce8; /* Soft warm ivory canvas */
+    --bg-main: #f8fafc; /* Crisp, clean neutral canvas */
     --card-bg: #ffffff;
-    --border-color: #000000;
-    --shadow-color: #000000;
+    --border-color: #0f172a; /* Slate 900 */
     --text-main: #0f172a; /* Slate 900 */
-    --text-muted: #475569;
+    --text-muted: #64748b; /* Slate 500 */
+    --accent-yellow: #facc15; /* Yellow 400 */
+    --accent-yellow-hover: #eab308; /* Yellow 500 */
   }
 
   .dark {
     --bg-main: #090d16; /* Deep dark obsidian */
     --card-bg: #0f172a; /* Slate 900 */
     --border-color: #334155; /* Slate 700 */
-    --shadow-color: #000000;
-    --text-main: #ffffff; /* Pure white */
-    --text-muted: #cbd5e1; /* Slate 300 */
+    --text-main: #f8fafc; /* Pure white / Slate 50 */
+    --text-muted: #94a3b8; /* Slate 400 */
+    --accent-yellow: #facc15;
+    --accent-yellow-hover: #eab308;
   }
 }
 
@@ -27,7 +29,8 @@ body {
   background-color: var(--bg-main);
   color: var(--text-main);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Custom scrollbars */
@@ -36,28 +39,28 @@ body {
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #facc15;
-  border-radius: 0px;
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
 }
 
-/* Neo-Brutalist Card Utility */
+/* Clean surface container tokens (replacing gratuitous heavy drop-shadows with structured contrast) */
 .brutal-card {
   background-color: var(--card-bg);
   color: var(--text-main);
   border: 2px solid var(--border-color);
   border-radius: 0.75rem; /* 12px */
-  box-shadow: 4px 4px 0px 0px var(--shadow-color);
-  transition: all 0.15s ease;
 }
 
 .dark .brutal-card {
   background-color: #0f172a;
-  color: #ffffff;
+  color: #f8fafc;
   border-color: #334155;
-  box-shadow: 4px 4px 0px 0px #000000;
 }
 
 .brutal-dashed {
@@ -65,68 +68,94 @@ body {
   color: var(--text-main);
   border: 2px dashed var(--border-color);
   border-radius: 0.75rem;
-  box-shadow: 3px 3px 0px 0px var(--shadow-color);
-  transition: all 0.15s ease;
 }
 
 .dark .brutal-dashed {
   background-color: #0f172a;
-  color: #ffffff;
+  color: #f8fafc;
   border-color: #334155;
-  box-shadow: 3px 3px 0px 0px #000000;
 }
 
-/* Neo-Brutalist Tactile Push Buttons */
-.brutal-btn-yellow {
+/* Primary Dominant Button Token: 44px min touch target, high contrast, clean hover/active/focus */
+.brutal-btn-yellow,
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.625rem 1.25rem;
   background-color: #facc15;
   color: #000000 !important;
   border: 2px solid #000000;
-  box-shadow: 3px 3px 0px 0px #000000;
+  border-radius: 0.5rem;
   font-weight: 800;
-  transition: all 0.1s ease;
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  cursor: pointer;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
 }
-.brutal-btn-yellow:hover {
-  background-color: #fde047;
-  transform: translate(-1px, -1px);
-  box-shadow: 4px 4px 0px 0px #000000;
+.brutal-btn-yellow:hover,
+.btn-primary:hover {
+  background-color: #eab308;
 }
-.brutal-btn-yellow:active {
-  transform: translate(2px, 2px);
-  box-shadow: 0px 0px 0px 0px #000000;
+.brutal-btn-yellow:active,
+.btn-primary:active {
+  background-color: #ca8a04;
+}
+.brutal-btn-yellow:focus-visible,
+.btn-primary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #000000;
+}
+.brutal-btn-yellow:disabled,
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
-.brutal-btn-cyan {
-  background-color: #22d3ee;
-  color: #000000 !important;
-  border: 2px solid #000000;
-  box-shadow: 3px 3px 0px 0px #000000;
-  font-weight: 800;
-  transition: all 0.1s ease;
+/* Secondary Button Token */
+.brutal-btn-cyan,
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.625rem 1.25rem;
+  background-color: #ffffff;
+  color: #0f172a !important;
+  border: 2px solid #0f172a;
+  border-radius: 0.5rem;
+  font-weight: 700;
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
 }
-.brutal-btn-cyan:hover {
-  background-color: #67e8f9;
-  transform: translate(-1px, -1px);
-  box-shadow: 4px 4px 0px 0px #000000;
+.dark .brutal-btn-cyan,
+.dark .btn-secondary {
+  background-color: #1e293b;
+  color: #f8fafc !important;
+  border-color: #475569;
 }
-.brutal-btn-cyan:active {
-  transform: translate(2px, 2px);
-  box-shadow: 0px 0px 0px 0px #000000;
+.brutal-btn-cyan:hover,
+.btn-secondary:hover {
+  background-color: #f1f5f9;
 }
-
-.brutal-btn-lime {
-  background-color: #a3e635;
-  color: #000000 !important;
-  border: 2px solid #000000;
-  box-shadow: 3px 3px 0px 0px #000000;
-  font-weight: 800;
-  transition: all 0.1s ease;
+.dark .brutal-btn-cyan:hover,
+.dark .btn-secondary:hover {
+  background-color: #334155;
 }
-.brutal-btn-lime:hover {
-  background-color: #bef264;
-  transform: translate(-1px, -1px);
-  box-shadow: 4px 4px 0px 0px #000000;
+.brutal-btn-cyan:focus-visible,
+.btn-secondary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #0f172a;
 }
-.brutal-btn-lime:active {
-  transform: translate(2px, 2px);
-  box-shadow: 0px 0px 0px 0px #000000;
+.brutal-btn-cyan:disabled,
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Award, Zap, Moon, Sun, ShieldCheck, Search } from 'lucide-react';
+import { Award, Zap, Moon, Sun, Search, Check } from 'lucide-react';
 import type { AppStep } from '../types';
 
 interface HeaderProps {
@@ -24,97 +24,140 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenVerification,
 }) => {
   const steps: { id: AppStep; label: string; number: number }[] = [
-    { id: 'upload', label: '1. UPLOAD', number: 1 },
-    { id: 'mapping', label: '2. MAP FIELDS', number: 2 },
-    { id: 'generate', label: '3. EXPORT ZIP', number: 3 },
+    { id: 'upload', label: 'Upload Files', number: 1 },
+    { id: 'mapping', label: 'Map Fields', number: 2 },
+    { id: 'generate', label: 'Export ZIP', number: 3 },
   ];
 
+  const currentStepIndex = currentStep === 'complete' ? 2 : steps.findIndex((s) => s.id === currentStep);
+
   return (
-    <header className="sticky top-0 z-50 bg-yellow-100/90 dark:bg-slate-900/90 backdrop-blur-md border-b-4 border-black dark:border-slate-700 px-6 py-4">
-      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+    <header className="sticky top-0 z-40 bg-white dark:bg-slate-900 border-b-2 border-slate-900 dark:border-slate-800 transition-colors">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-col md:flex-row items-center justify-between gap-4">
         
-        {/* Brutalist Brand Logo */}
-        <div
-          className="flex items-center gap-3 cursor-pointer"
-          onClick={() => setStep('upload')}
-        >
-          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-yellow-300 border-2 border-black shadow-[3px_3px_0px_0px_#000000] text-black font-black">
-            <Award className="w-6 h-6 stroke-[3]" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xl font-black font-mono tracking-wider text-slate-900 dark:text-white uppercase">
+        {/* Brand & Mobile Row */}
+        <div className="w-full md:w-auto flex items-center justify-between">
+          <button
+            onClick={() => setStep('upload')}
+            className="flex items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-yellow-400 rounded-lg"
+          >
+            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-yellow-400 text-slate-950 font-black border-2 border-slate-950">
+              <Award className="w-5 h-5 stroke-[2.5]" />
+            </div>
+            <div>
+              <span className="text-lg font-black tracking-tight text-slate-900 dark:text-white uppercase font-mono">
                 CREDORA
               </span>
-              <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-cyan-300 text-black border-2 border-black">
-                PRO
+              <span className="hidden sm:block text-xs font-medium text-slate-600 dark:text-slate-400">
+                Bulk Certificate Studio
               </span>
             </div>
+          </button>
+
+          {/* Quick Actions on Mobile */}
+          <div className="flex items-center gap-2 md:hidden">
+            {onOpenVerification && (
+              <button
+                type="button"
+                onClick={() => onOpenVerification()}
+                className="min-h-[44px] min-w-[44px] px-3 rounded-lg border-2 border-slate-900 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-xs font-bold flex items-center justify-center gap-1.5"
+                title="Verify a certificate by ID"
+              >
+                <Search className="w-4 h-4" />
+                <span>Verify</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setDarkMode(!darkMode)}
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg border-2 border-slate-900 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+              aria-label="Toggle dark mode"
+            >
+              {darkMode ? <Sun className="w-5 h-5 text-yellow-400" /> : <Moon className="w-5 h-5 text-slate-700" />}
+            </button>
           </div>
         </div>
 
-        {/* 3-Step Brutalist Stepper */}
-        <nav className="flex items-center gap-2">
-          {steps.map((step, idx) => {
-            const isActive = currentStep === step.id || (currentStep === 'complete' && step.id === 'generate');
-            const isDisabled =
-              (step.id === 'mapping' && (!hasTemplate || !hasSpreadsheet)) ||
-              (step.id === 'generate' && (!hasTemplate || !hasSpreadsheet));
+        {/* Multi-Step Flow Indicator */}
+        <nav aria-label="Progress" className="w-full md:w-auto flex items-center justify-center overflow-x-auto py-1">
+          <ol className="flex items-center gap-1 sm:gap-2">
+            {steps.map((step, idx) => {
+              const isActive = currentStep === step.id || (currentStep === 'complete' && step.id === 'generate');
+              const isPast = idx < currentStepIndex;
+              const isDisabled =
+                (step.id === 'mapping' && (!hasTemplate || !hasSpreadsheet)) ||
+                (step.id === 'generate' && (!hasTemplate || !hasSpreadsheet));
 
-            return (
-              <React.Fragment key={step.id}>
-                {idx > 0 && <span className="font-mono font-black text-slate-900 dark:text-white">➔</span>}
-                <button
-                  disabled={isDisabled}
-                  onClick={() => !isDisabled && setStep(step.id)}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-mono font-black border-2 border-black transition-all ${
-                    isActive
-                      ? 'bg-yellow-300 text-black shadow-[3px_3px_0px_0px_#000000]'
-                      : isDisabled
-                      ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 opacity-50 cursor-not-allowed border-slate-400 dark:border-slate-700'
-                      : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700 shadow-[2px_2px_0px_0px_#000000]'
-                  }`}
-                >
-                  {step.label}
-                </button>
-              </React.Fragment>
-            );
-          })}
+              return (
+                <li key={step.id} className="flex items-center">
+                  <button
+                    type="button"
+                    disabled={isDisabled}
+                    onClick={() => !isDisabled && setStep(step.id)}
+                    className={`min-h-[44px] px-3.5 py-2 rounded-lg text-xs font-mono font-bold border-2 transition-colors flex items-center gap-2 ${
+                      isActive
+                        ? 'bg-yellow-400 text-slate-950 border-slate-950 font-black'
+                        : isPast
+                        ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 border-emerald-600 dark:border-emerald-700 hover:bg-emerald-100'
+                        : isDisabled
+                        ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 border-slate-300 dark:border-slate-700 cursor-not-allowed opacity-60'
+                        : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-900 dark:border-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span
+                      className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${
+                        isActive
+                          ? 'bg-slate-950 text-yellow-400'
+                          : isPast
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      {isPast ? <Check className="w-3 h-3 stroke-[3]" /> : step.number}
+                    </span>
+                    <span className="whitespace-nowrap">{step.label}</span>
+                  </button>
+
+                  {idx < steps.length - 1 && (
+                    <div className="w-3 sm:w-6 h-0.5 bg-slate-300 dark:bg-slate-700 mx-1 shrink-0" aria-hidden="true" />
+                  )}
+                </li>
+              );
+            })}
+          </ol>
         </nav>
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-3">
+        {/* Desktop Actions */}
+        <div className="hidden md:flex items-center gap-2.5">
           <button
+            type="button"
             onClick={onLoadSample}
-            className="px-3.5 py-1.5 rounded-lg brutal-btn-cyan text-xs font-mono flex items-center gap-1.5"
+            className="min-h-[44px] px-3.5 rounded-lg border-2 border-slate-900 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-900 dark:text-white font-mono text-xs font-bold flex items-center gap-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400"
           >
-            <Zap className="w-3.5 h-3.5 fill-black" />
-            <span>TRY DEMO SAMPLE</span>
+            <Zap className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+            <span>Load Demo</span>
           </button>
 
           {onOpenVerification && (
             <button
+              type="button"
               onClick={() => onOpenVerification()}
-              className="px-3 py-1.5 rounded-lg bg-yellow-300 hover:bg-yellow-400 text-black border-2 border-black font-mono font-black text-xs flex items-center gap-1.5 shadow-[2px_2px_0px_0px_#000000] transition-transform active:translate-x-0.5 active:translate-y-0.5"
+              className="min-h-[44px] px-3.5 rounded-lg border-2 border-slate-900 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-900 dark:text-white font-mono text-xs font-bold flex items-center gap-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400"
               title="Verify a certificate by certificate number"
             >
-              <Search className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span className="hidden sm:inline">VERIFY CERT #</span>
-              <span className="sm:hidden">VERIFY</span>
+              <Search className="w-4 h-4" />
+              <span>Verify by ID</span>
             </button>
           )}
 
-          <div className="hidden lg:flex items-center gap-1.5 text-xs font-mono font-bold px-3 py-1.5 rounded-lg bg-emerald-300 text-black border-2 border-black shadow-[2px_2px_0px_0px_#000000]">
-            <ShieldCheck className="w-4 h-4 stroke-[2.5]" />
-            <span>100% PRIVATE</span>
-          </div>
-
           <button
+            type="button"
             onClick={() => setDarkMode(!darkMode)}
-            className="p-2 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white border-2 border-black dark:border-slate-700 shadow-[2px_2px_0px_0px_#000000]"
-            title="Toggle dark mode"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg border-2 border-slate-900 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-900 dark:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400"
+            aria-label="Toggle dark mode"
           >
-            {darkMode ? <Sun className="w-4 h-4 text-yellow-300" /> : <Moon className="w-4 h-4 text-slate-900" />}
+            {darkMode ? <Sun className="w-5 h-5 text-yellow-400" /> : <Moon className="w-5 h-5 text-slate-700" />}
           </button>
         </div>
 

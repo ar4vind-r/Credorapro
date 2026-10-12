@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Upload,
   FileSpreadsheet,
   FileImage,
   CheckCircle2,
@@ -8,9 +7,10 @@ import {
   Zap,
   ArrowRight,
   Trash2,
-  Table,
   Search,
   ShieldCheck,
+  Download,
+  Info,
 } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
@@ -61,9 +61,11 @@ export const UploadStep: React.FC<UploadStepProps> = ({
           selectedPage: 1,
         });
       } catch (err: any) {
-        setErrorMsg(err.message || 'Failed to process PDF template');
+        setErrorMsg(
+          err.message || 'Could not rasterize PDF template. Ensure the PDF is not password-protected and re-upload.'
+        );
       }
-    } else if (file.type.startsWith('image/')) {
+    } else if (file.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(fileName)) {
       const reader = new FileReader();
       reader.onload = (e) => {
         const dataUrl = e.target?.result as string;
@@ -81,7 +83,7 @@ export const UploadStep: React.FC<UploadStepProps> = ({
       };
       reader.readAsDataURL(file);
     } else {
-      setErrorMsg('Unsupported template file type. Please upload a PNG, JPG, or PDF file.');
+      setErrorMsg(`Unsupported file format '${file.name}'. Please upload a PNG, JPG, or PDF file.`);
     }
   };
 
@@ -93,18 +95,25 @@ export const UploadStep: React.FC<UploadStepProps> = ({
     if (fileName.endsWith('.csv')) {
       Papa.parse(file, {
         header: true,
-        skipEmptyLines: true,
+        skipEmptyLines: 'greedy',
         complete: (results) => {
           if (!results.data || results.data.length === 0) {
-            setErrorMsg('The uploaded CSV file is empty.');
+            setErrorMsg('The uploaded CSV file is empty. Please add a header row and attendee records.');
             return;
           }
 
-          const headers = results.meta.fields || Object.keys(results.data[0] as object);
-          validateAndSetSpreadsheet(file.name, headers, results.data as any[]);
+          const rawHeaders = results.meta.fields || Object.keys(results.data[0] as object);
+          const headers = rawHeaders.map((h) => h.trim()).filter(Boolean);
+
+          if (headers.length === 0) {
+            setErrorMsg('The CSV file has no valid column headers in row 1. Please add headers (e.g. Name, Course, Date).');
+            return;
+          }
+
+          validateAndSetSpreadsheet(file.name, headers, results.data as Record<string, any>[]);
         },
         error: (err) => {
-          setErrorMsg(`Failed to parse CSV: ${err.message}`);
+          setErrorMsg(`Could not read CSV file: ${err.message}. Please check encoding and re-upload.`);
         },
       });
     } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
@@ -114,42 +123,70 @@ export const UploadStep: React.FC<UploadStepProps> = ({
           const data = new Uint8Array(e.target?.result as ArrayBuffer);
           const workbook = XLSX.read(data, { type: 'array' });
           const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
 
-          if (!jsonData || jsonData.length === 0) {
-            setErrorMsg('The Excel sheet contains no rows.');
+          if (!firstSheetName) {
+            setErrorMsg('The Excel workbook contains no sheets.');
             return;
           }
 
-          const headers = Object.keys(jsonData[0] as object);
-          validateAndSetSpreadsheet(file.name, headers, jsonData as any[]);
+          const worksheet = workbook.Sheets[firstSheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' }) as Record<string, any>[];
+
+          if (!jsonData || jsonData.length === 0) {
+            setErrorMsg(`Sheet '${firstSheetName}' in ${file.name} is empty. Add a header row and attendee data.`);
+            return;
+          }
+
+          const headers = Object.keys(jsonData[0] as object).map((h) => h.trim()).filter(Boolean);
+          validateAndSetSpreadsheet(file.name, headers, jsonData);
         } catch (err: any) {
-          setErrorMsg(`Failed to parse Excel file: ${err.message}`);
+          setErrorMsg(`Could not parse Excel spreadsheet: ${err.message}. Export as CSV and re-upload.`);
         }
       };
       reader.readAsArrayBuffer(file);
     } else {
-      setErrorMsg('Unsupported spreadsheet format. Please upload a CSV or XLSX file.');
+      setErrorMsg(`Unsupported spreadsheet format '${file.name}'. Please upload a CSV (.csv) or Excel (.xlsx) file.`);
     }
   };
 
-  // Auto-detect 'name' column or let user select
+  // Granular validation with row-specific error reporting
   const validateAndSetSpreadsheet = (
     fileName: string,
     headers: string[],
-    rows: Record<string, any>[]
+    rawRows: Record<string, any>[]
   ) => {
+    // Filter out completely blank rows
+    const rows = rawRows.filter((r) =>
+      Object.values(r).some((val) => String(val || '').trim() !== '')
+    );
+
+    if (rows.length === 0) {
+      setErrorMsg('No attendee rows found in spreadsheet. Ensure data rows exist beneath the header.');
+      return;
+    }
+
+    // Auto-detect 'name' column
     const nameHeader =
       headers.find((h) =>
-        ['name', 'full_name', 'fullname', 'student_name', 'recipient', 'person'].includes(
+        ['name', 'full_name', 'fullname', 'student_name', 'recipient', 'person', 'attendee_name'].includes(
           h.toLowerCase().trim()
         )
       ) || headers[0];
 
     if (!nameHeader) {
-      setErrorMsg('Could not detect columns in the spreadsheet.');
+      setErrorMsg('Could not detect column titles. Ensure the first row of your spreadsheet contains column headers.');
       return;
+    }
+
+    // Validate that every attendee row has a name
+    for (let i = 0; i < rows.length; i++) {
+      const rowVal = String(rows[i][nameHeader] || '').trim();
+      if (!rowVal) {
+        setErrorMsg(
+          `Row ${i + 2} has no recipient name under column '${nameHeader}'. Fix it in your spreadsheet and re-upload.`
+        );
+        return;
+      }
     }
 
     setSpreadsheet({
@@ -158,6 +195,19 @@ export const UploadStep: React.FC<UploadStepProps> = ({
       rows,
       nameHeader,
     });
+  };
+
+  // Download Sample CSV format for immediate testing/reference
+  const handleDownloadSampleCsv = () => {
+    const csvContent =
+      'Name,Course,Date,Role\nAlex Rivera,Advanced Python Development,October 12 2026,Participant\nJordan Lee,Modern Web Architecture,October 12 2026,Honor Graduate\nTaylor Swift,Creative Music Production,October 12 2026,Distinction Award';
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'credora_sample_attendees.csv';
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   // Filtered rows for data table preview
@@ -169,59 +219,89 @@ export const UploadStep: React.FC<UploadStepProps> = ({
       )
     : [];
 
+  const isReadyToProceed = !!template && !!spreadsheet && spreadsheet.rows.length > 0;
+
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-16 text-slate-900 dark:text-slate-100">
+    <div className="max-w-5xl mx-auto space-y-8 pb-16 text-slate-900 dark:text-slate-100 font-sans">
       
-      {/* Brutalist Title Banner */}
-      <div className="brutal-card p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-yellow-300 dark:bg-slate-900 border-2 border-black dark:border-slate-700 text-slate-900 dark:text-white">
+      {/* 1. Page Header with Strong Hierarchy */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-slate-900/10 dark:border-slate-800 pb-6">
         <div>
-          <h1 className="text-3xl font-black font-mono tracking-tight uppercase text-slate-900 dark:text-white">
-            BULK CERTIFICATE GENERATOR
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+            Upload Template & Recipient List
           </h1>
-          <p className="text-xs font-mono font-bold text-slate-800 dark:text-slate-300 mt-1">
-            Upload design template & spreadsheet data ➔ Map fields visually ➔ Export bulk ZIP.
+          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 max-w-2xl">
+            Supply your graphic certificate background and recipient spreadsheet. Everything is processed 100% locally in your browser with zero data sent to external servers.
           </p>
         </div>
 
         <button
+          type="button"
           onClick={onLoadSample}
-          className="brutal-btn-cyan px-4 py-2 text-xs font-mono flex items-center gap-1.5 shrink-0 text-black"
+          className="min-h-[44px] px-4 py-2.5 rounded-lg border-2 border-slate-900 dark:border-slate-700 bg-yellow-400 hover:bg-yellow-500 text-slate-950 font-mono text-xs font-bold flex items-center justify-center gap-2 shrink-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-900"
         >
-          <Zap className="w-4 h-4 fill-black" />
-          <span>TRY DEMO SAMPLE</span>
+          <Zap className="w-4 h-4 fill-slate-950" />
+          <span>Try Demo Data</span>
         </button>
       </div>
 
-      {/* Error Alert */}
+      {/* 2. Specific Actionable Error Alert */}
       {errorMsg && (
-        <div className="flex items-center gap-3 p-4 rounded-xl bg-red-400 border-2 border-black text-black font-mono font-bold text-xs">
-          <AlertCircle className="w-5 h-5 shrink-0 stroke-[3]" />
-          <span>{errorMsg}</span>
+        <div
+          role="alert"
+          className="flex items-start gap-3 p-4 rounded-xl bg-red-50 dark:bg-red-950/40 border-2 border-red-600 dark:border-red-500 text-red-950 dark:text-red-200 text-sm font-medium"
+        >
+          <AlertCircle className="w-5 h-5 shrink-0 text-red-600 dark:text-red-400 mt-0.5" />
+          <div className="space-y-1">
+            <span className="font-bold block">Spreadsheet Issue Detected:</span>
+            <span>{errorMsg}</span>
+          </div>
         </div>
       )}
 
-      {/* Dual Upload Cards Section */}
+      {/* 3. Expected Spreadsheet Format Guide */}
+      <div className="p-4 rounded-xl bg-slate-100 dark:bg-slate-800/80 border-2 border-slate-900/20 dark:border-slate-700 text-xs font-mono space-y-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Info className="w-4 h-4 text-slate-700 dark:text-slate-300 shrink-0" />
+            <span className="font-bold text-slate-900 dark:text-white">Expected Spreadsheet Columns:</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleDownloadSampleCsv}
+            className="inline-flex items-center gap-1.5 text-xs text-slate-900 dark:text-yellow-400 underline font-bold hover:text-yellow-600"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Download Sample CSV Template</span>
+          </button>
+        </div>
+
+        <p className="text-slate-600 dark:text-slate-400 font-sans text-xs">
+          Column 1 must contain attendee names (e.g. <code className="bg-white dark:bg-slate-900 px-1 py-0.5 rounded font-mono font-bold">Name</code> or <code className="bg-white dark:bg-slate-900 px-1 py-0.5 rounded font-mono font-bold">Recipient</code>). Additional columns like <code className="bg-white dark:bg-slate-900 px-1 py-0.5 rounded font-mono">Course</code>, <code className="bg-white dark:bg-slate-900 px-1 py-0.5 rounded font-mono">Date</code>, or <code className="bg-white dark:bg-slate-900 px-1 py-0.5 rounded font-mono">Grade</code> can be mapped to custom canvas text in Step 2.
+        </p>
+      </div>
+
+      {/* 4. Dual Intake Zones */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
-        {/* Card 1: Certificate Template Dropzone */}
+        {/* Zone A: Certificate Template */}
         <div className="brutal-card p-6 space-y-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-lg bg-yellow-300 border-2 border-black font-black text-black">
-                <FileImage className="w-5 h-5 stroke-[2.5]" />
-              </div>
-              <div>
-                <h3 className="text-sm font-black font-mono uppercase text-slate-900 dark:text-white">
-                  1. CERTIFICATE TEMPLATE
-                </h3>
-                <p className="text-[11px] font-mono text-slate-600 dark:text-slate-400 font-bold">PNG, JPG, or PDF file</p>
-              </div>
+            <div>
+              <span className="text-xs font-mono font-bold text-slate-500 uppercase tracking-wider block">
+                Step 1A
+              </span>
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                Certificate Visual Template
+              </h2>
+              <span className="text-xs text-slate-500 dark:text-slate-400">PNG, JPG, or PDF (1920x1080 or A4)</span>
             </div>
 
             {template && (
               <button
+                type="button"
                 onClick={() => setTemplate(null)}
-                className="p-1.5 text-slate-900 dark:text-white hover:text-red-500 rounded-lg border-2 border-black dark:border-slate-700"
+                className="min-h-[44px] min-w-[44px] p-2 text-slate-700 dark:text-slate-300 hover:text-red-600 rounded-lg border-2 border-slate-900 dark:border-slate-700 flex items-center justify-center transition-colors"
                 title="Remove template"
               >
                 <Trash2 className="w-4 h-4" />
@@ -236,54 +316,55 @@ export const UploadStep: React.FC<UploadStepProps> = ({
                 e.preventDefault();
                 if (e.dataTransfer.files?.[0]) handleTemplateFile(e.dataTransfer.files[0]);
               }}
-              className="brutal-dashed p-8 flex flex-col items-center justify-center cursor-pointer text-center"
+              className="brutal-dashed min-h-[160px] p-6 flex flex-col items-center justify-center cursor-pointer text-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors focus-within:ring-2 focus-within:ring-slate-900"
             >
               <input
                 type="file"
                 accept="image/png, image/jpeg, image/jpg, application/pdf"
-                className="hidden"
+                className="sr-only"
                 onChange={(e) => {
                   if (e.target.files?.[0]) handleTemplateFile(e.target.files[0]);
                 }}
               />
-              <Upload className="w-8 h-8 text-slate-900 dark:text-white mb-2 stroke-[2.5]" />
-              <p className="text-xs font-mono font-bold text-slate-900 dark:text-white uppercase">
-                CLICK TO BROWSE OR DRAG & DROP
-              </p>
-              <p className="text-[11px] font-mono text-slate-600 dark:text-slate-400 font-bold mt-1">Recommended size 1920x1080 or A4</p>
+              <FileImage className="w-8 h-8 text-slate-700 dark:text-slate-300 mb-2 stroke-[2]" />
+              <span className="text-sm font-bold text-slate-900 dark:text-white">
+                Click to browse or drop template
+              </span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Supports PNG, JPG, and single-page PDF
+              </span>
             </label>
           ) : (
             <div className="space-y-3">
-              <div className="relative rounded-lg overflow-hidden border-2 border-black dark:border-slate-700 bg-slate-950 h-36">
+              <div className="relative rounded-lg overflow-hidden border-2 border-slate-900 dark:border-slate-700 bg-slate-950 h-36">
                 <img src={template.dataUrl} alt="Template preview" className="w-full h-full object-contain" />
               </div>
-              <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                <CheckCircle2 className="w-4 h-4" />
-                <span>{template.name} ({template.width}x{template.height}px)</span>
+              <div className="flex items-center gap-2 text-xs font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span className="truncate">{template.name} ({template.width}x{template.height}px)</span>
               </div>
             </div>
           )}
         </div>
 
-        {/* Card 2: Recipient Spreadsheet Dropzone */}
+        {/* Zone B: Recipient Spreadsheet */}
         <div className="brutal-card p-6 space-y-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-lg bg-cyan-300 border-2 border-black font-black text-black">
-                <FileSpreadsheet className="w-5 h-5 stroke-[2.5]" />
-              </div>
-              <div>
-                <h3 className="text-sm font-black font-mono uppercase text-slate-900 dark:text-white">
-                  2. RECIPIENT SPREADSHEET
-                </h3>
-                <p className="text-[11px] font-mono text-slate-600 dark:text-slate-400 font-bold">CSV or Excel (.xlsx) file</p>
-              </div>
+            <div>
+              <span className="text-xs font-mono font-bold text-slate-500 uppercase tracking-wider block">
+                Step 1B
+              </span>
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                Attendee Spreadsheet
+              </h2>
+              <span className="text-xs text-slate-500 dark:text-slate-400">CSV or Excel (.xlsx) file</span>
             </div>
 
             {spreadsheet && (
               <button
+                type="button"
                 onClick={() => setSpreadsheet(null)}
-                className="p-1.5 text-slate-900 dark:text-white hover:text-red-500 rounded-lg border-2 border-black dark:border-slate-700"
+                className="min-h-[44px] min-w-[44px] p-2 text-slate-700 dark:text-slate-300 hover:text-red-600 rounded-lg border-2 border-slate-900 dark:border-slate-700 flex items-center justify-center transition-colors"
                 title="Remove spreadsheet"
               >
                 <Trash2 className="w-4 h-4" />
@@ -298,35 +379,40 @@ export const UploadStep: React.FC<UploadStepProps> = ({
                 e.preventDefault();
                 if (e.dataTransfer.files?.[0]) handleSpreadsheetFile(e.dataTransfer.files[0]);
               }}
-              className="brutal-dashed p-8 flex flex-col items-center justify-center cursor-pointer text-center"
+              className="brutal-dashed min-h-[160px] p-6 flex flex-col items-center justify-center cursor-pointer text-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors focus-within:ring-2 focus-within:ring-slate-900"
             >
               <input
                 type="file"
                 accept=".csv, .xlsx, .xls"
-                className="hidden"
+                className="sr-only"
                 onChange={(e) => {
                   if (e.target.files?.[0]) handleSpreadsheetFile(e.target.files[0]);
                 }}
               />
-              <Upload className="w-8 h-8 text-slate-900 dark:text-white mb-2 stroke-[2.5]" />
-              <p className="text-xs font-mono font-bold text-slate-900 dark:text-white uppercase">
-                CLICK TO BROWSE OR DRAG & DROP
-              </p>
-              <p className="text-[11px] font-mono text-slate-600 dark:text-slate-400 font-bold mt-1">Must contain recipient name column</p>
+              <FileSpreadsheet className="w-8 h-8 text-slate-700 dark:text-slate-300 mb-2 stroke-[2]" />
+              <span className="text-sm font-bold text-slate-900 dark:text-white">
+                Click to browse or drop spreadsheet
+              </span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                CSV or Excel (.xlsx) with recipient names
+              </span>
             </label>
           ) : (
             <div className="space-y-3">
-              <div className="p-4 rounded-lg bg-cyan-100 dark:bg-slate-800 border-2 border-black dark:border-slate-700 space-y-2 text-xs font-mono">
+              <div className="p-3.5 rounded-lg bg-slate-100 dark:bg-slate-800 border-2 border-slate-900 dark:border-slate-700 space-y-2 text-xs font-mono">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-slate-900 dark:text-white truncate">{spreadsheet.fileName}</span>
-                  <span className="px-2 py-0.5 rounded bg-yellow-300 border-2 border-black text-black font-bold text-[10px]">
-                    {spreadsheet.rows.length} ROWS
+                  <span className="px-2 py-0.5 rounded bg-yellow-400 text-slate-950 font-black text-[11px]">
+                    {spreadsheet.rows.length} Attendees
                   </span>
                 </div>
 
                 <div className="flex items-center gap-2 pt-1">
-                  <span className="text-slate-700 dark:text-slate-300 font-bold text-[11px]">Primary Name Column:</span>
+                  <label htmlFor="name-col-select" className="text-slate-600 dark:text-slate-400 font-bold text-[11px] shrink-0">
+                    Recipient Name Column:
+                  </label>
                   <select
+                    id="name-col-select"
                     value={spreadsheet.nameHeader}
                     onChange={(e) =>
                       setSpreadsheet({
@@ -334,7 +420,7 @@ export const UploadStep: React.FC<UploadStepProps> = ({
                         nameHeader: e.target.value,
                       })
                     }
-                    className="px-2 py-1 rounded bg-white dark:bg-slate-900 border-2 border-black dark:border-slate-700 font-bold text-xs text-slate-900 dark:text-white"
+                    className="min-h-[40px] px-2 py-1 rounded bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-slate-700 font-bold text-xs text-slate-900 dark:text-white"
                   >
                     {spreadsheet.headers.map((h) => (
                       <option key={h} value={h} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
@@ -345,9 +431,9 @@ export const UploadStep: React.FC<UploadStepProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
+              <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-emerald-700 dark:text-emerald-400">
                 <CheckCircle2 className="w-4 h-4" />
-                <span>SPREADSHEET PARSED SUCCESSFULLY</span>
+                <span>Spreadsheet verified: {spreadsheet.rows.length} valid attendee rows</span>
               </div>
             </div>
           )}
@@ -355,50 +441,52 @@ export const UploadStep: React.FC<UploadStepProps> = ({
 
       </div>
 
-      {/* Spreadsheet Table Preview if Loaded */}
+      {/* 5. Spreadsheet Tabular Preview */}
       {spreadsheet && (
         <div className="brutal-card p-5 space-y-3">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Table className="w-4 h-4 text-slate-900 dark:text-white" />
-              <h3 className="text-sm font-black font-mono uppercase text-slate-900 dark:text-white">
-                RECIPIENT RECORDS ({spreadsheet.rows.length})
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white font-mono uppercase">
+                Parsed Attendee Rows ({spreadsheet.rows.length})
               </h3>
+              <p className="text-xs text-slate-500">Previewing first 20 records. Confirm columns are mapped accurately.</p>
             </div>
 
-            <div className="relative w-full sm:w-60">
-              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+            <div className="relative w-full sm:w-64">
+              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 placeholder="Search rows..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border-2 border-black dark:border-slate-700 font-mono text-xs text-slate-900 dark:text-white focus:outline-none"
+                className="min-h-[40px] w-full pl-9 pr-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border-2 border-slate-900 dark:border-slate-700 font-mono text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
               />
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border-2 border-black dark:border-slate-700 max-h-48">
+          <div className="overflow-x-auto rounded-lg border-2 border-slate-900 dark:border-slate-700 max-h-52">
             <table className="w-full text-left text-xs font-mono">
-              <thead className="bg-yellow-300 text-black font-black uppercase sticky top-0 border-b-2 border-black">
+              <thead className="bg-yellow-400 text-slate-950 font-black uppercase sticky top-0 border-b-2 border-slate-900">
                 <tr>
                   <th className="p-2.5 font-black">#</th>
                   {spreadsheet.headers.map((h) => (
-                    <th key={h} className="p-2.5 font-black">
+                    <th key={h} className="p-2.5 font-black whitespace-nowrap">
                       {h} {h === spreadsheet.nameHeader && '(NAME)'}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y-2 divide-black dark:divide-slate-700 bg-white dark:bg-slate-900">
+              <tbody className="divide-y-2 divide-slate-200 dark:divide-slate-800 bg-white dark:bg-slate-900">
                 {filteredRows.slice(0, 20).map((row, idx) => (
-                  <tr key={idx} className="hover:bg-yellow-50 dark:hover:bg-slate-800">
-                    <td className="p-2.5 font-bold text-slate-600 dark:text-slate-400">{idx + 1}</td>
+                  <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                    <td className="p-2.5 font-bold text-slate-500">{idx + 1}</td>
                     {spreadsheet.headers.map((h) => (
                       <td
                         key={h}
                         className={`p-2.5 ${
-                          h === spreadsheet.nameHeader ? 'font-black text-indigo-600 dark:text-yellow-300' : 'text-slate-900 dark:text-slate-100'
+                          h === spreadsheet.nameHeader
+                            ? 'font-black text-slate-900 dark:text-yellow-400'
+                            : 'text-slate-800 dark:text-slate-200'
                         }`}
                       >
                         {String(row[h] || '')}
@@ -412,21 +500,48 @@ export const UploadStep: React.FC<UploadStepProps> = ({
         </div>
       )}
 
-      {/* Verify by Certificate Number Section on Main Site (for damaged or printed certificates) */}
-      <div className="brutal-card p-5 bg-white dark:bg-slate-900 border-2 border-black dark:border-slate-700 space-y-3 font-mono">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b-2 border-black/10 dark:border-slate-800 pb-2">
-          <div className="flex items-center gap-2">
-            <div className="p-1 rounded bg-yellow-300 border-2 border-black text-black">
-              <ShieldCheck className="w-4 h-4 stroke-[2.5]" />
-            </div>
-            <div>
-              <h3 className="font-black text-xs uppercase text-slate-900 dark:text-white">
-                VERIFY BY CERTIFICATE NUMBER
-              </h3>
-              <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
-                Checking a printed, damaged, or physical certificate? Enter its certificate number to query the official registry.
-              </p>
-            </div>
+      {/* 6. Dominant Primary Action Bar */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-5 brutal-card bg-white dark:bg-slate-900">
+        <div>
+          <span className="text-xs font-bold text-slate-700 dark:text-slate-300 font-mono">
+            {!template && !spreadsheet
+              ? 'Upload both certificate template and attendee spreadsheet above to proceed.'
+              : !template
+              ? 'Template missing: upload an image or PDF template to continue.'
+              : !spreadsheet
+              ? 'Spreadsheet missing: upload attendee data to continue.'
+              : `Ready to map ${spreadsheet.rows.length} attendee certificates.`}
+          </span>
+        </div>
+
+        <button
+          type="button"
+          disabled={!isReadyToProceed}
+          onClick={onProceed}
+          className="w-full sm:w-auto brutal-btn-yellow px-8 py-3.5 text-xs font-mono font-black uppercase flex items-center justify-center gap-2"
+        >
+          <span>
+            {isReadyToProceed
+              ? `Continue to Map Fields (${spreadsheet.rows.length} Attendees)`
+              : 'Upload Files to Continue'}
+          </span>
+          <ArrowRight className="w-4 h-4 stroke-[3]" />
+        </button>
+      </div>
+
+      {/* 7. Dedicated Verification Section for Physical / Damaged Certificates */}
+      <div className="brutal-card p-5 bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-slate-700 space-y-3 font-mono">
+        <div className="flex items-center gap-2 border-b-2 border-slate-900/10 dark:border-slate-800 pb-2">
+          <div className="p-1 rounded bg-yellow-400 text-slate-950 border-2 border-slate-950">
+            <ShieldCheck className="w-4 h-4 stroke-[2.5]" />
+          </div>
+          <div>
+            <h3 className="font-bold text-xs uppercase text-slate-900 dark:text-white">
+              Verify Printed Certificate by ID
+            </h3>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-sans">
+              Checking a physical, printed, or damaged certificate? Enter the certificate ID (e.g. CRD-2026-X8K9M2) to query the official registry.
+            </p>
           </div>
         </div>
 
@@ -446,39 +561,17 @@ export const UploadStep: React.FC<UploadStepProps> = ({
               value={manualCertId}
               onChange={(e) => setManualCertId(e.target.value.toUpperCase())}
               placeholder="e.g. CRD-2026-X8K9M2"
-              className="w-full pl-9 pr-3 py-2 rounded-lg bg-yellow-50/50 dark:bg-slate-800 border-2 border-black dark:border-slate-700 text-xs font-mono font-bold tracking-wider uppercase text-slate-900 dark:text-white focus:outline-none"
+              className="min-h-[44px] w-full pl-9 pr-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border-2 border-slate-900 dark:border-slate-700 text-xs font-mono font-bold tracking-wider uppercase text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
             />
           </div>
           <button
             type="submit"
             disabled={!manualCertId.trim()}
-            className="px-5 py-2 brutal-btn-yellow text-xs font-black uppercase text-black disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+            className="min-h-[44px] px-6 py-2.5 brutal-btn-yellow text-xs font-black uppercase text-black disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
           >
-            VERIFY NOW
+            Verify Now
           </button>
         </form>
-      </div>
-
-      {/* Action Footer Bar */}
-      <div className="flex items-center justify-between p-5 brutal-card bg-yellow-100 dark:bg-slate-900 border-2 border-black dark:border-slate-700 text-slate-900 dark:text-white">
-        <span className="text-xs font-mono font-bold text-slate-800 dark:text-slate-200">
-          {!template || !spreadsheet
-            ? '★ Upload template and spreadsheet above to unlock visual mapping.'
-            : '★ Files ready! Click continue to place text fields on canvas.'}
-        </span>
-
-        <button
-          disabled={!template || !spreadsheet}
-          onClick={onProceed}
-          className={`flex items-center gap-2 px-6 py-2.5 text-xs font-mono font-black uppercase transition-all ${
-            template && spreadsheet
-              ? 'brutal-btn-yellow text-black'
-              : 'bg-slate-300 dark:bg-slate-800 text-slate-500 border-2 border-black cursor-not-allowed opacity-50'
-          }`}
-        >
-          <span>CONTINUE TO MAP FIELDS</span>
-          <ArrowRight className="w-4 h-4 stroke-[3]" />
-        </button>
       </div>
 
     </div>

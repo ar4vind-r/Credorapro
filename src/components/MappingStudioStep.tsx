@@ -703,20 +703,21 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
     >
       
       {/* Top Bar Controls */}
-      <div className="brutal-card p-3.5 flex flex-col md:flex-row items-center justify-between gap-4 bg-yellow-100 dark:bg-slate-900 border-2 border-black dark:border-slate-700 text-slate-900 dark:text-white">
+      <div className="brutal-card p-4 flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-slate-800 text-slate-900 dark:text-white">
         
         {/* Row Selector Switcher & Undo/Redo */}
         <div className="flex flex-wrap items-center gap-3 text-xs font-mono font-bold">
           <span className="flex items-center gap-1.5 text-slate-900 dark:text-white uppercase">
-            <Eye className="w-4 h-4 text-slate-900 dark:text-yellow-300" />
+            <Eye className="w-4 h-4 text-slate-900 dark:text-yellow-400" />
             <span>PREVIEW ROW:</span>
           </span>
 
-          <div className="flex items-center gap-1 bg-white dark:bg-slate-800 px-3 py-1 rounded-lg border-2 border-black dark:border-slate-700">
+          <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded-lg border-2 border-slate-900 dark:border-slate-700">
             <button
+              type="button"
               disabled={selectedRowIndex === 0}
               onClick={() => setSelectedRowIndex((prev) => Math.max(0, prev - 1))}
-              className="p-1 text-slate-900 dark:text-white disabled:opacity-30"
+              className="min-h-[36px] min-w-[36px] flex items-center justify-center text-slate-900 dark:text-white disabled:opacity-30 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors"
               title="Previous Row ([)"
             >
               <ChevronLeft className="w-4 h-4 stroke-[3]" />
@@ -725,7 +726,7 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
             <select
               value={selectedRowIndex}
               onChange={(e) => setSelectedRowIndex(Number(e.target.value))}
-              className="bg-transparent font-black text-xs px-2 text-slate-900 dark:text-white focus:outline-none"
+              className="min-h-[36px] bg-transparent font-bold text-xs px-2 text-slate-900 dark:text-white focus:outline-none"
             >
               {spreadsheet.rows.map((r, i) => {
                 const recName = getRowValue(r, spreadsheet.nameHeader) || getRowValue(r, 'name') || `Recipient ${i + 1}`;
@@ -738,9 +739,10 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
             </select>
 
             <button
+              type="button"
               disabled={selectedRowIndex >= spreadsheet.rows.length - 1}
               onClick={() => setSelectedRowIndex((prev) => Math.min(spreadsheet.rows.length - 1, prev + 1))}
-              className="p-1 text-slate-900 dark:text-white disabled:opacity-30"
+              className="min-h-[36px] min-w-[36px] flex items-center justify-center text-slate-900 dark:text-white disabled:opacity-30 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors"
               title="Next Row (])"
             >
               <ChevronRight className="w-4 h-4 stroke-[3]" />
@@ -750,20 +752,22 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
           {/* Undo / Redo Buttons */}
           <div className="flex items-center gap-1">
             <button
+              type="button"
               disabled={historyIndex <= 0}
               onClick={handleUndo}
-              className="p-1.5 rounded-lg bg-white dark:bg-slate-800 border-2 border-black dark:border-slate-700 disabled:opacity-30 hover:bg-yellow-200 transition-colors"
+              className="min-h-[44px] min-w-[44px] p-2 rounded-lg bg-white dark:bg-slate-800 border-2 border-slate-900 dark:border-slate-700 disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex items-center justify-center"
               title="Undo (Ctrl + Z)"
             >
-              <Undo2 className="w-3.5 h-3.5" />
+              <Undo2 className="w-4 h-4" />
             </button>
             <button
+              type="button"
               disabled={historyIndex >= history.length - 1}
               onClick={handleRedo}
-              className="p-1.5 rounded-lg bg-white dark:bg-slate-800 border-2 border-black dark:border-slate-700 disabled:opacity-30 hover:bg-yellow-200 transition-colors"
+              className="min-h-[44px] min-w-[44px] p-2 rounded-lg bg-white dark:bg-slate-800 border-2 border-slate-900 dark:border-slate-700 disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex items-center justify-center"
               title="Redo (Ctrl + Y)"
             >
-              <Redo2 className="w-3.5 h-3.5" />
+              <Redo2 className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -771,25 +775,27 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
         {/* Layout Save/Load & Shortcuts Modal Toggle */}
         <div className="flex items-center gap-2 text-xs font-mono font-bold">
           <button
+            type="button"
             onClick={() => setShowShortcutsModal(true)}
-            className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white border-2 border-black dark:border-slate-700 flex items-center gap-1.5 hover:bg-yellow-200 dark:hover:bg-slate-700 transition-colors"
+            className="min-h-[44px] px-3.5 py-2 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white border-2 border-slate-900 dark:border-slate-700 flex items-center gap-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
             title="View Keyboard Shortcuts (?)"
           >
-            <Keyboard className="w-3.5 h-3.5 text-yellow-600 dark:text-yellow-400 stroke-[2.5]" />
-            <span>SHORTCUTS (?)</span>
+            <Keyboard className="w-4 h-4 text-slate-700 dark:text-yellow-400 stroke-[2]" />
+            <span>Shortcuts (?)</span>
           </button>
 
           <button
+            type="button"
             onClick={handleExportTemplateConfig}
-            className="brutal-btn-yellow px-3 py-1.5 flex items-center gap-1.5 text-black"
+            className="min-h-[44px] brutal-btn-yellow px-3.5 py-2 flex items-center gap-1.5 text-black"
           >
-            <Download className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span>SAVE</span>
+            <Download className="w-4 h-4 stroke-[2]" />
+            <span>Save</span>
           </button>
 
-          <label className="brutal-btn-cyan px-3 py-1.5 flex items-center gap-1.5 cursor-pointer text-black">
-            <Upload className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span>LOAD</span>
+          <label className="min-h-[44px] brutal-btn-cyan px-3.5 py-2 flex items-center gap-1.5 cursor-pointer text-slate-900 dark:text-white">
+            <Upload className="w-4 h-4 stroke-[2]" />
+            <span>Load</span>
             <input
               type="file"
               accept=".json"
@@ -831,7 +837,7 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
             <div
               ref={canvasContainerRef}
               style={aspectStyle}
-              className="relative w-full aspect-[16/9] rounded-xl overflow-hidden bg-slate-950 border-2 border-black shadow-[4px_4px_0px_0px_#000000] select-none touch-none"
+              className="relative w-full aspect-[16/9] rounded-xl overflow-hidden bg-slate-950 border-2 border-slate-900 dark:border-slate-700 select-none touch-none"
             >
               <img
                 src={template.dataUrl}
@@ -878,13 +884,13 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
                         : 'justify-start text-left'
                     } ${
                       isActive
-                        ? 'ring-4 ring-yellow-400 bg-yellow-300/20 shadow-md border-2 border-black'
-                        : 'hover:ring-2 hover:ring-slate-400'
+                        ? 'ring-2 ring-yellow-400 bg-yellow-400/10 border border-slate-950'
+                        : 'hover:ring-1 hover:ring-slate-400'
                     }`}
                   >
                     {m.type === 'qr_code' ? (
-                      <div className="w-full h-full flex flex-col items-center justify-center bg-white border-2 border-black text-black p-1">
-                        <QrCode className="w-full h-full stroke-[2.5]" />
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-white border border-slate-900 text-black p-1">
+                        <QrCode className="w-full h-full stroke-[2]" />
                       </div>
                     ) : (
                       <span
@@ -897,14 +903,14 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
                           letterSpacing: `${(m.style.letterSpacing || 0) * previewScale}px`,
                           lineHeight: m.style.lineHeight || 1.3,
                         }}
-                        className="truncate px-1 pointer-events-none drop-shadow-md font-black"
+                        className="truncate px-1 pointer-events-none font-bold"
                       >
                         {displayVal}
                       </span>
                     )}
 
                     {isActive && (
-                      <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded bg-yellow-300 text-black border-2 border-black font-mono font-black text-[9px] uppercase shadow-[2px_2px_0px_0px_#000000] whitespace-nowrap">
+                      <div className="absolute -top-5 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded bg-yellow-400 text-slate-950 border border-slate-950 font-mono font-bold text-[10px] uppercase whitespace-nowrap">
                         {m.label} ({m.style.x}%, {m.style.y}%)
                       </div>
                     )}
@@ -1362,21 +1368,23 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
       </div>
 
       {/* Navigation CTA Bar */}
-      <div className="flex items-center justify-between p-4 brutal-card bg-yellow-100 dark:bg-slate-900">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 brutal-card bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-slate-800">
         <button
+          type="button"
           onClick={onBack}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono font-bold text-xs border-2 border-black dark:border-slate-700"
+          className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-900 dark:text-white font-mono font-bold text-xs border-2 border-slate-900 dark:border-slate-700 transition-colors"
         >
           <ChevronLeft className="w-4 h-4 stroke-[3]" />
-          <span>BACK TO UPLOAD</span>
+          <span>Back to Upload Files</span>
         </button>
 
         <button
+          type="button"
           onClick={onProceed}
-          className="flex items-center gap-2 px-6 py-2.5 brutal-btn-yellow text-xs font-mono font-black uppercase text-black"
-          title="Continue to Export (Ctrl + Enter)"
+          className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-2 px-6 py-3 brutal-btn-yellow text-xs font-mono font-black uppercase text-black"
+          title="Continue to Export Settings (Ctrl + Enter)"
         >
-          <span>CONTINUE TO EXPORT</span>
+          <span>Continue to Export ({spreadsheet.rows.length} Certificates)</span>
           <kbd className="hidden sm:inline-block px-1.5 py-0.5 rounded bg-black text-yellow-300 font-mono text-[10px]">Ctrl+Enter</kbd>
           <ArrowRight className="w-4 h-4 stroke-[3]" />
         </button>
@@ -1384,11 +1392,11 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
 
       {/* Keyboard Shortcuts Cheat Sheet Modal */}
       {showShortcutsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="brutal-card max-w-2xl w-full p-6 space-y-5 bg-white dark:bg-slate-900 border-4 border-black text-slate-900 dark:text-white shadow-[8px_8px_0px_0px_#000000]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80">
+          <div className="brutal-card max-w-2xl w-full p-6 space-y-5 bg-white dark:bg-slate-900 border-4 border-slate-900 dark:border-slate-700 text-slate-900 dark:text-white">
             
             {/* Header */}
-            <div className="flex items-center justify-between border-b-2 border-black dark:border-slate-700 pb-3">
+            <div className="flex items-center justify-between border-b-2 border-slate-900 dark:border-slate-700 pb-3">
               <div className="flex items-center gap-2">
                 <Keyboard className="w-5 h-5 text-yellow-500 stroke-[2.5]" />
                 <h2 className="text-base font-black uppercase font-mono tracking-tight">
@@ -1396,8 +1404,9 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
                 </h2>
               </div>
               <button
+                type="button"
                 onClick={() => setShowShortcutsModal(false)}
-                className="p-1 rounded-lg bg-yellow-300 text-black border-2 border-black font-black hover:bg-yellow-400"
+                className="min-h-[36px] min-w-[36px] p-1.5 rounded-lg bg-yellow-400 text-black border-2 border-black font-black hover:bg-yellow-500 transition-colors flex items-center justify-center"
               >
                 <X className="w-4 h-4 stroke-[3]" />
               </button>

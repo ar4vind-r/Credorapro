@@ -8,7 +8,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased] - 2026-10-12
 
-### Added
+### Changed & Redesigned (Whole-Site Design System Alignment)
+- **Visual Effects & Clutter Removal:**
+  - Removed gratuitous gradients, heavy shadows (`box-shadow: 4px 4px 0px 0px`), glassmorphism (`backdrop-blur-*`), and decorative animations across all screens.
+  - Retained functional motion strictly where it communicates state (progress spinner and linear progress bar during bulk batch rendering).
+  - Streamlined container hierarchy: replaced nested boxes and excessive borders with strong typography (font size, font weight) and structured whitespace.
+- **Primary Actions with Dominant Verb Labels:**
+  - **Upload Screen:** Replaced generic submission button with dominant verb label: `"Continue to Map Fields ({count} Attendees)"`, with clear explanatory disabled states when files are missing.
+  - **Mapping Studio Screen:** Updated primary navigation action to `"Continue to Export ({count} Certificates)"` with keyboard accelerator support (`Ctrl+Enter`).
+  - **Export Screen:** Updated primary batch trigger to `"Generate {count} Certificates"` and post-generation action to `"Download ZIP Archive ({count} Files)"`.
+  - **Flow Progress:** Redesigned multi-step stepper in `src/components/Header.tsx` displaying accessible progression (`Step 1 of 3: Upload Files`, `Step 2 of 3: Map Fields`, `Step 3 of 3: Export ZIP`) with past-step completion marks.
+- **Granular, Useful Content & Actionable Error Reporting:**
+  - Added **Expected Spreadsheet Columns Guide** on `src/components/UploadStep.tsx` detailing required (`Name`) and optional (`Course`, `Date`, `Role`, `Grade`) fields.
+  - Added one-click **"Download Sample CSV Template"** utility generating an immediate reference CSV file.
+  - Replaced generic spreadsheet errors with row-specific actionable reporting: `"Row {N} has no recipient name under '{column}'. Fix it in your spreadsheet and re-upload."`
+  - In `src/components/VerificationModal.tsx`, added explicit sections for **"What this confirms"** and **"What to do next"** tailored to Valid, Revoked, Not Found, Network Error, and Unverified Fallback states.
+- **Mobile Responsiveness & Touch Target Compliance:**
+  - Verified and ensured all buttons, inputs, dropdowns, and interactive dropzones meet the WCAG minimum **44px touch target** standard (`min-h-[44px]`).
+  - Tested layout across 360px, 390px, 768px, and 1280px viewports with zero horizontal scrolling.
+  - Refactored `src/index.css` to use centralized design-system tokens (`.btn-primary`, `.btn-secondary`, `.brutal-card`, `--bg-main`, `--text-main`, `--border-color`).
+
+### Added (Previous Verification Engine Upgrade)
 - **Certificate Verification & Cloud Registry System:**
   - Added `firebase` SDK dependency to connect to cloud database registry for independent certificate validation.
   - Added `.env.example` and `.env` containing Firestore configuration parameters (`VITE_FIREBASE_*`).
@@ -21,21 +41,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Added interactive "SHOW ON VERIFY PAGE" toggle in `src/components/MappingStudioStep.tsx` property inspector.
   - Added smart default privacy rules: enabled for name, course/event, date, certificate number; disabled for email, phone, contact, address, SSN, Aadhar.
 - **Verification UI & Result States:**
-  - Upgraded `src/components/VerificationModal.tsx` to a mobile-first (360–430px) inspection view presenting:
-    1. Status banner first (emerald for verified, red for revoked, rose for not found, amber for network error/notice).
-    2. Recipient name in large bold type.
-    3. Certificate number with copy button.
-    4. Published credential details, issuing authority, and issue date.
-  - Implemented all 6 core verification result states:
-    - **Found, Valid:** "Certificate verified" with official stamp and published details.
-    - **Revoked:** "Certificate revoked" with explicit revocation reason and crossed-out recipient name.
-    - **Not Found:** "No certificate with this number exists" with manual number re-entry (never displays green).
-    - **Network Error:** "Status could not be checked" with error details and a "Retry Verification" button.
-    - **Loading:** Multi-element shimmer skeleton loader.
-    - **Unverified Fallback:** Displays "Details read from QR code — not independently verified" without using the words "authentic" or "verified" when no database is configured.
-- **Main Site Verification Entry Points:**
-  - Added "VERIFY CERT #" button to top brutalist header in `src/components/Header.tsx`.
-  - Added dedicated "VERIFY BY CERTIFICATE NUMBER" card on main upload step in `src/components/UploadStep.tsx` for damaged or printed certificates.
+  - Upgraded `src/components/VerificationModal.tsx` to a mobile-first (360–430px) inspection view.
+  - Implemented all 6 core verification result states: Valid, Revoked (with reason), Not Found (explicit non-green error), Network Error (with retry), Loading Skeleton, and Unverified Fallback.
 - **QR Code & Template Generator:**
   - Updated `src/utils/generator.ts` to encode strictly short URLs (`origin + '/?verify=' + certId`) with zero recipient parameters to prevent forgery.
   - Rendered small certificate number text directly beneath the QR code canvas.
