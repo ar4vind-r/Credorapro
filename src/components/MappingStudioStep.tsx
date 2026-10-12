@@ -22,6 +22,10 @@ import {
   FileText,
   Keyboard,
   Crosshair,
+  Copy,
+  Undo2,
+  Redo2,
+  X,
 } from 'lucide-react';
 import type {
   TemplateFile,
@@ -87,11 +91,42 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [previewWidth, setPreviewWidth] = useState(1000);
   const [nudgeStep, setNudgeStep] = useState<number>(0.2); // 0.2% for micro, 1.0% for fast
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+
+  // Undo / Redo History Stack
+  const [history, setHistory] = useState<FieldMapping[][]>([mappings]);
+  const [historyIndex, setHistoryIndex] = useState(0);
 
   const canvasContainerRef = useRef<HTMLDivElement>(null);
 
   const selectedRow = spreadsheet.rows[selectedRowIndex] || spreadsheet.rows[0];
   const activeField = mappings.find((m) => m.id === activeFieldId) || null;
+
+  // Push state to undo/redo history
+  const commitMappingsWithHistory = (newMappings: FieldMapping[]) => {
+    const nextHistory = history.slice(0, historyIndex + 1);
+    nextHistory.push(newMappings);
+    if (nextHistory.length > 40) nextHistory.shift();
+    setHistory(nextHistory);
+    setHistoryIndex(nextHistory.length - 1);
+    setMappings(newMappings);
+  };
+
+  const handleUndo = () => {
+    if (historyIndex > 0) {
+      const prev = history[historyIndex - 1];
+      setHistoryIndex(historyIndex - 1);
+      setMappings(prev);
+    }
+  };
+
+  const handleRedo = () => {
+    if (historyIndex < history.length - 1) {
+      const next = history[historyIndex + 1];
+      setHistoryIndex(historyIndex + 1);
+      setMappings(next);
+    }
+  };
 
   // Track container width for 100% proportional font size parity
   useEffect(() => {
@@ -110,52 +145,228 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
     return () => resizeObserver.disconnect();
   }, []);
 
-  // Keyboard Arrow Keys Precise Nudging Listener
+  // Comprehensive Keyboard Shortcuts Listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!activeFieldId) return;
-
-      // Don't intercept arrow keys if user is typing in an input, textarea, or select
+      // Don't intercept shortcuts if user is typing in an input, textarea, or select
       const targetTag = (e.target as HTMLElement)?.tagName?.toUpperCase();
-      if (targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'SELECT') {
+      const isInput = targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'SELECT';
+
+      // Global shortcut: Toggle Shortcuts Help Modal (? or Shift + /)
+      if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+        if (!isInput) {
+          e.preventDefault();
+          setShowShortcutsModal((prev) => !prev);
+          return;
+        }
+      }
+
+      // Close modal on Escape
+      if (e.key === 'Escape' && showShortcutsModal) {
+        e.preventDefault();
+        setShowShortcutsModal(false);
         return;
       }
 
+      // Global shortcut: Proceed to Export (Ctrl + Enter or Cmd + Enter)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        onProceed();
+        return;
+      }
+
+      // If user is typing in form controls, stop here
+      if (isInput) return;
+
+      // Undo (Ctrl + Z or Cmd + Z) & Redo (Ctrl + Y or Ctrl + Shift + Z)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          handleRedo();
+        } else {
+          handleUndo();
+        }
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        handleRedo();
+        return;
+      }
+
+      // Row Preview Switcher: [ or , for Previous, ] or . for Next
+      if (e.key === '[' || e.key === '<') {
+        e.preventDefault();
+        setSelectedRowIndex((prev) => Math.max(0, prev - 1));
+        return;
+      }
+      if (e.key === ']' || e.key === '>') {
+        e.preventDefault();
+        setSelectedRowIndex((prev) => Math.min(spreadsheet.rows.length - 1, prev + 1));
+        return;
+      }
+
+      // Selection cycling: Tab / Shift + Tab
+      if (e.key === 'Tab' && mappings.length > 0) {
+        e.preventDefault();
+        const currentIndex = mappings.findIndex((m) => m.id === activeFieldId);
+        if (e.shiftKey) {
+          const prevIndex = currentIndex <= 0 ? mappings.length - 1 : currentIndex - 1;
+          setActiveFieldId(mappings[prevIndex].id);
+        } else {
+          const nextIndex = currentIndex >= mappings.length - 1 ? 0 : currentIndex + 1;
+          setActiveFieldId(mappings[nextIndex].id);
+        }
+        return;
+      }
+
+      // Deselect on Escape
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setActiveFieldId(null);
+        return;
+      }
+
+      // Action on Active Field
+      if (!activeFieldId) return;
       const currentField = mappings.find((m) => m.id === activeFieldId);
       if (!currentField) return;
 
+      // Delete active field: Delete or Backspace
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        deleteField(activeFieldId);
+        return;
+      }
+
+      // Duplicate field: Ctrl + D or Cmd + D
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        duplicateField(activeFieldId);
+        return;
+      }
+
+      // Center horizontally: C key
+      if (e.key.toLowerCase() === 'c' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        const updated = mappings.map((m) =>
+          m.id === activeFieldId
+            ? {
+                ...m,
+                style: {
+                  ...m.style,
+                  x: 15,
+                  width: 70,
+                  textAlign: 'center' as const,
+                },
+              }
+            : m
+        );
+        commitMappingsWithHistory(updated);
+        return;
+      }
+
+      // Font size adjustment: + or = (increase), - or _ (decrease)
+      if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        const newSize = Math.min(120, currentField.style.fontSize + 2);
+        updateActiveFieldStyle('fontSize', newSize);
+        return;
+      }
+      if (e.key === '-' || e.key === '_') {
+        e.preventDefault();
+        const newSize = Math.max(10, currentField.style.fontSize - 2);
+        updateActiveFieldStyle('fontSize', newSize);
+        return;
+      }
+
+      // Typography toggles
+      if (e.key.toLowerCase() === 'b' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        const isBold = currentField.style.fontWeight === '700' || currentField.style.fontWeight === '800';
+        updateActiveFieldStyle('fontWeight', isBold ? 'normal' : '700');
+        return;
+      }
+      if (e.key.toLowerCase() === 'i' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        const isItalic = currentField.style.fontStyle === 'italic';
+        updateActiveFieldStyle('fontStyle', isItalic ? 'normal' : 'italic');
+        return;
+      }
+      if (e.key.toLowerCase() === 'u' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        const isUpper = currentField.style.textTransform === 'uppercase';
+        updateActiveFieldStyle('textTransform', isUpper ? 'none' : 'uppercase');
+        return;
+      }
+
+      // Text Alignment shortcuts: L (Left), E (Center), R (Right)
+      if (e.key.toLowerCase() === 'l' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        updateActiveFieldStyle('textAlign', 'left');
+        return;
+      }
+      if (e.key.toLowerCase() === 'e' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        updateActiveFieldStyle('textAlign', 'center');
+        return;
+      }
+      if (e.key.toLowerCase() === 'r' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        updateActiveFieldStyle('textAlign', 'right');
+        return;
+      }
+
+      // Alt + Arrow Keys: Resize Width & Height
+      if (e.altKey) {
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          const newWidth = Math.min(100, Math.round((currentField.style.width + 1) * 10) / 10);
+          updateActiveFieldStyle('width', newWidth);
+          return;
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          const newWidth = Math.max(5, Math.round((currentField.style.width - 1) * 10) / 10);
+          updateActiveFieldStyle('width', newWidth);
+          return;
+        } else if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          const newHeight = Math.min(50, Math.round((currentField.style.height + 1) * 10) / 10);
+          updateActiveFieldStyle('height', newHeight);
+          return;
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          const newHeight = Math.max(3, Math.round((currentField.style.height - 1) * 10) / 10);
+          updateActiveFieldStyle('height', newHeight);
+          return;
+        }
+      }
+
+      // Arrow Keys: Nudge Position
       const step = e.shiftKey ? 1.0 : 0.2;
 
       if (e.key === 'ArrowUp') {
         e.preventDefault();
         const newY = Math.max(0, Math.round((currentField.style.y - step) * 10) / 10);
-        setMappings((prev) =>
-          prev.map((m) => (m.id === activeFieldId ? { ...m, style: { ...m.style, y: newY } } : m))
-        );
+        updateActiveFieldStyle('y', newY);
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
         const newY = Math.min(95, Math.round((currentField.style.y + step) * 10) / 10);
-        setMappings((prev) =>
-          prev.map((m) => (m.id === activeFieldId ? { ...m, style: { ...m.style, y: newY } } : m))
-        );
+        updateActiveFieldStyle('y', newY);
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
         const newX = Math.max(0, Math.round((currentField.style.x - step) * 10) / 10);
-        setMappings((prev) =>
-          prev.map((m) => (m.id === activeFieldId ? { ...m, style: { ...m.style, x: newX } } : m))
-        );
+        updateActiveFieldStyle('x', newX);
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
         const newX = Math.min(95, Math.round((currentField.style.x + step) * 10) / 10);
-        setMappings((prev) =>
-          prev.map((m) => (m.id === activeFieldId ? { ...m, style: { ...m.style, x: newX } } : m))
-        );
+        updateActiveFieldStyle('x', newX);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeFieldId, mappings]);
+  }, [activeFieldId, mappings, historyIndex, history, showShortcutsModal, spreadsheet.rows.length]);
 
   // Auto initialize mappings if empty
   useEffect(() => {
@@ -181,7 +392,7 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
           height: 8,
         },
       }));
-      setMappings(initialMappings);
+      commitMappingsWithHistory(initialMappings);
       if (initialMappings.length > 0) {
         setActiveFieldId(initialMappings[0].id);
       }
@@ -191,9 +402,10 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
   // Update style property of active field
   const updateActiveFieldStyle = (key: keyof FieldStyle, value: any) => {
     if (!activeFieldId) return;
-    setMappings((prev) =>
-      prev.map((m) => (m.id === activeFieldId ? { ...m, style: { ...m.style, [key]: value } } : m))
+    const updated = mappings.map((m) =>
+      m.id === activeFieldId ? { ...m, style: { ...m.style, [key]: value } } : m
     );
+    commitMappingsWithHistory(updated);
   };
 
   // Nudge direction helper (for on-screen precision buttons)
@@ -210,12 +422,31 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
     }
   };
 
+  // Duplicate Field Helper
+  const duplicateField = (id: string) => {
+    const target = mappings.find((m) => m.id === id);
+    if (!target) return;
+    const duplicated: FieldMapping = {
+      ...target,
+      id: `field_${Date.now()}`,
+      label: `${target.label} (Copy)`,
+      style: {
+        ...target.style,
+        x: Math.min(85, Math.round((target.style.x + 3) * 10) / 10),
+        y: Math.min(85, Math.round((target.style.y + 3) * 10) / 10),
+      },
+    };
+    commitMappingsWithHistory([...mappings, duplicated]);
+    setActiveFieldId(duplicated.id);
+  };
+
   // Update custom text content of active field
   const updateActiveFieldCustomText = (text: string) => {
     if (!activeFieldId) return;
-    setMappings((prev) =>
-      prev.map((m) => (m.id === activeFieldId ? { ...m, customText: text } : m))
+    const updated = mappings.map((m) =>
+      m.id === activeFieldId ? { ...m, customText: text } : m
     );
+    commitMappingsWithHistory(updated);
   };
 
   // Add new field column mapping
@@ -241,7 +472,7 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
         height: 6,
       },
     };
-    setMappings((prev) => [...prev, newField]);
+    commitMappingsWithHistory([...mappings, newField]);
     setActiveFieldId(newField.id);
   };
 
@@ -272,7 +503,7 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
         height: 12,
       },
     };
-    setMappings((prev) => [...prev, newField]);
+    commitMappingsWithHistory([...mappings, newField]);
     setActiveFieldId(newField.id);
   };
 
@@ -299,15 +530,15 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
         height: 14,
       },
     };
-    setMappings((prev) => [...prev, newField]);
+    commitMappingsWithHistory([...mappings, newField]);
     setActiveFieldId(newField.id);
   };
 
   // Delete field
   const deleteField = (id: string) => {
-    setMappings((prev) => prev.filter((m) => m.id !== id));
+    const remaining = mappings.filter((m) => m.id !== id);
+    commitMappingsWithHistory(remaining);
     if (activeFieldId === id) {
-      const remaining = mappings.filter((m) => m.id !== id);
       setActiveFieldId(remaining.length > 0 ? remaining[0].id : null);
     }
   };
@@ -403,7 +634,7 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
       try {
         const imported = JSON.parse(e.target?.result as string);
         if (Array.isArray(imported)) {
-          setMappings(imported);
+          commitMappingsWithHistory(imported);
           if (imported.length > 0) setActiveFieldId(imported[0].id);
         }
       } catch (err) {
@@ -428,8 +659,8 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
       {/* Top Bar Controls */}
       <div className="brutal-card p-3.5 flex flex-col md:flex-row items-center justify-between gap-4 bg-yellow-100 dark:bg-slate-900 border-2 border-black dark:border-slate-700 text-slate-900 dark:text-white">
         
-        {/* Row Selector Switcher */}
-        <div className="flex items-center gap-3 text-xs font-mono font-bold">
+        {/* Row Selector Switcher & Undo/Redo */}
+        <div className="flex flex-wrap items-center gap-3 text-xs font-mono font-bold">
           <span className="flex items-center gap-1.5 text-slate-900 dark:text-white uppercase">
             <Eye className="w-4 h-4 text-slate-900 dark:text-yellow-300" />
             <span>PREVIEW ROW:</span>
@@ -440,6 +671,7 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
               disabled={selectedRowIndex === 0}
               onClick={() => setSelectedRowIndex((prev) => Math.max(0, prev - 1))}
               className="p-1 text-slate-900 dark:text-white disabled:opacity-30"
+              title="Previous Row ([)"
             >
               <ChevronLeft className="w-4 h-4 stroke-[3]" />
             </button>
@@ -463,25 +695,55 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
               disabled={selectedRowIndex >= spreadsheet.rows.length - 1}
               onClick={() => setSelectedRowIndex((prev) => Math.min(spreadsheet.rows.length - 1, prev + 1))}
               className="p-1 text-slate-900 dark:text-white disabled:opacity-30"
+              title="Next Row (])"
             >
               <ChevronRight className="w-4 h-4 stroke-[3]" />
             </button>
           </div>
+
+          {/* Undo / Redo Buttons */}
+          <div className="flex items-center gap-1">
+            <button
+              disabled={historyIndex <= 0}
+              onClick={handleUndo}
+              className="p-1.5 rounded-lg bg-white dark:bg-slate-800 border-2 border-black dark:border-slate-700 disabled:opacity-30 hover:bg-yellow-200 transition-colors"
+              title="Undo (Ctrl + Z)"
+            >
+              <Undo2 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              disabled={historyIndex >= history.length - 1}
+              onClick={handleRedo}
+              className="p-1.5 rounded-lg bg-white dark:bg-slate-800 border-2 border-black dark:border-slate-700 disabled:opacity-30 hover:bg-yellow-200 transition-colors"
+              title="Redo (Ctrl + Y)"
+            >
+              <Redo2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
-        {/* Layout Save/Load Buttons */}
+        {/* Layout Save/Load & Shortcuts Modal Toggle */}
         <div className="flex items-center gap-2 text-xs font-mono font-bold">
+          <button
+            onClick={() => setShowShortcutsModal(true)}
+            className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white border-2 border-black dark:border-slate-700 flex items-center gap-1.5 hover:bg-yellow-200 dark:hover:bg-slate-700 transition-colors"
+            title="View Keyboard Shortcuts (?)"
+          >
+            <Keyboard className="w-3.5 h-3.5 text-yellow-600 dark:text-yellow-400 stroke-[2.5]" />
+            <span>SHORTCUTS (?)</span>
+          </button>
+
           <button
             onClick={handleExportTemplateConfig}
             className="brutal-btn-yellow px-3 py-1.5 flex items-center gap-1.5 text-black"
           >
             <Download className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span>SAVE MAPPING</span>
+            <span>SAVE</span>
           </button>
 
           <label className="brutal-btn-cyan px-3 py-1.5 flex items-center gap-1.5 cursor-pointer text-black">
             <Upload className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span>LOAD MAPPING</span>
+            <span>LOAD</span>
             <input
               type="file"
               accept=".json"
@@ -504,13 +766,16 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono font-bold text-slate-900 dark:text-slate-200">
               <span className="flex items-center gap-1.5">
                 <Move className="w-4 h-4" />
-                <span>DRAG OR USE ARROW KEYS (↑ ↓ ← →) TO POSITION</span>
+                <span>DRAG OR USE KEYBOARD SHORTCUTS</span>
               </span>
               <div className="flex items-center gap-1.5">
-                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded bg-cyan-100 dark:bg-slate-800 text-slate-800 dark:text-cyan-300 border border-black dark:border-slate-700 text-[10px]">
+                <button
+                  onClick={() => setShowShortcutsModal(true)}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-cyan-100 dark:bg-slate-800 text-slate-800 dark:text-cyan-300 border border-black dark:border-slate-700 text-[10px] hover:underline"
+                >
                   <Keyboard className="w-3 h-3" />
-                  <span>Shift+Arrows for 1%</span>
-                </span>
+                  <span>Press ? for all shortcuts</span>
+                </button>
                 <span className="bg-yellow-300 text-black border-2 border-black px-2 py-0.5 rounded font-black text-[11px] uppercase">
                   {template.name}
                 </span>
@@ -682,18 +947,27 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
               <div className="flex items-center justify-between pb-2.5 border-b-2 border-black dark:border-slate-700">
                 <div className="flex items-center gap-2">
                   <Sliders className="w-4 h-4 text-slate-900 dark:text-yellow-300 stroke-[2.5]" />
-                  <span className="font-black text-slate-900 dark:text-white uppercase truncate max-w-[180px]">
+                  <span className="font-black text-slate-900 dark:text-white uppercase truncate max-w-[150px]">
                     {activeField.label}
                   </span>
                 </div>
 
-                <button
-                  onClick={() => deleteField(activeField.id)}
-                  className="p-1 text-slate-900 dark:text-white hover:text-red-600 border-2 border-black rounded"
-                  title="Delete field"
-                >
-                  <Trash2 className="w-4 h-4 stroke-[2.5]" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => duplicateField(activeField.id)}
+                    className="p-1 text-slate-900 dark:text-white hover:text-indigo-600 border-2 border-black rounded"
+                    title="Duplicate Field (Ctrl + D)"
+                  >
+                    <Copy className="w-4 h-4 stroke-[2.5]" />
+                  </button>
+                  <button
+                    onClick={() => deleteField(activeField.id)}
+                    className="p-1 text-slate-900 dark:text-white hover:text-red-600 border-2 border-black rounded"
+                    title="Delete Field (Del / Backspace)"
+                  >
+                    <Trash2 className="w-4 h-4 stroke-[2.5]" />
+                  </button>
+                </div>
               </div>
 
               {/* Precision Arrow Nudge & Coordinates Panel */}
@@ -701,7 +975,7 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
                     <Crosshair className="w-3.5 h-3.5 text-yellow-600 dark:text-yellow-400" />
-                    <span>NUDGE POSITION:</span>
+                    <span>NUDGE & RESIZE:</span>
                   </span>
 
                   <div className="flex items-center gap-1 text-[10px] font-bold">
@@ -714,7 +988,7 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
                           : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300'
                       }`}
                     >
-                      Fine (0.2%)
+                      Fine 0.2%
                     </button>
                     <button
                       type="button"
@@ -725,7 +999,7 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
                           : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300'
                       }`}
                     >
-                      Coarse (1%)
+                      Coarse 1%
                     </button>
                   </div>
                 </div>
@@ -798,9 +1072,11 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
                   </div>
                 </div>
 
-                <p className="text-[10px] text-slate-600 dark:text-slate-400 font-mono pt-0.5">
-                  ⌨️ Tip: Click box & use <span className="font-bold text-black dark:text-white">↑ ↓ ← →</span> arrow keys on keyboard. Hold <span className="font-bold text-black dark:text-white">Shift</span> for 1% step.
-                </p>
+                <div className="flex items-center justify-between text-[10px] text-slate-600 dark:text-slate-400 font-mono pt-1 border-t border-black/20 dark:border-slate-700">
+                  <span>Alt+Arrows: Resize</span>
+                  <span>Shift+Arrows: 1%</span>
+                  <span>C: Center</span>
+                </div>
               </div>
 
               {/* Custom Text Content Textarea */}
@@ -842,7 +1118,10 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
                   {/* Size & Weight */}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="font-bold text-slate-900 dark:text-slate-200">FONT SIZE ({activeField.style.fontSize}):</label>
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold text-slate-900 dark:text-slate-200">SIZE ({activeField.style.fontSize}):</label>
+                        <span className="text-[10px] text-slate-500 font-bold">(+/- keys)</span>
+                      </div>
                       <input
                         type="range"
                         min="10"
@@ -854,7 +1133,10 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
                     </div>
 
                     <div className="space-y-1">
-                      <label className="font-bold text-slate-900 dark:text-slate-200">WEIGHT:</label>
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold text-slate-900 dark:text-slate-200">WEIGHT:</label>
+                        <span className="text-[10px] text-slate-500 font-bold">(B key)</span>
+                      </div>
                       <select
                         value={activeField.style.fontWeight}
                         onChange={(e) => updateActiveFieldStyle('fontWeight', e.target.value)}
@@ -898,13 +1180,17 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
                   {/* Alignment & Case */}
                   <div className="grid grid-cols-2 gap-3 pt-1">
                     <div className="space-y-1">
-                      <label className="font-bold text-slate-900 dark:text-slate-200">ALIGNMENT:</label>
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold text-slate-900 dark:text-slate-200">ALIGNMENT:</label>
+                        <span className="text-[10px] text-slate-500 font-bold">(L/E/R)</span>
+                      </div>
                       <div className="flex items-center gap-1 bg-white dark:bg-slate-800 p-1 rounded-lg border-2 border-black dark:border-slate-700">
                         <button
                           onClick={() => updateActiveFieldStyle('textAlign', 'left')}
                           className={`flex-1 p-1 rounded border-2 border-black flex justify-center ${
                             activeField.style.textAlign === 'left' ? 'bg-yellow-300 text-black font-black' : 'text-slate-500'
                           }`}
+                          title="Align Left (L)"
                         >
                           <AlignLeft className="w-3.5 h-3.5 stroke-[3]" />
                         </button>
@@ -913,6 +1199,7 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
                           className={`flex-1 p-1 rounded border-2 border-black flex justify-center ${
                             activeField.style.textAlign === 'center' ? 'bg-yellow-300 text-black font-black' : 'text-slate-500'
                           }`}
+                          title="Align Center (E)"
                         >
                           <AlignCenter className="w-3.5 h-3.5 stroke-[3]" />
                         </button>
@@ -921,6 +1208,7 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
                           className={`flex-1 p-1 rounded border-2 border-black flex justify-center ${
                             activeField.style.textAlign === 'right' ? 'bg-yellow-300 text-black font-black' : 'text-slate-500'
                           }`}
+                          title="Align Right (R)"
                         >
                           <AlignRight className="w-3.5 h-3.5 stroke-[3]" />
                         </button>
@@ -928,7 +1216,10 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
                     </div>
 
                     <div className="space-y-1">
-                      <label className="font-bold text-slate-900 dark:text-slate-200">CASE:</label>
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold text-slate-900 dark:text-slate-200">CASE:</label>
+                        <span className="text-[10px] text-slate-500 font-bold">(U key)</span>
+                      </div>
                       <select
                         value={activeField.style.textTransform}
                         onChange={(e) => updateActiveFieldStyle('textTransform', e.target.value)}
@@ -949,9 +1240,10 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
                         updateActiveFieldStyle('width', 70);
                         updateActiveFieldStyle('textAlign', 'center');
                       }}
-                      className="w-full py-1.5 rounded-lg brutal-btn-yellow text-xs font-mono font-black uppercase text-black"
+                      className="w-full py-1.5 rounded-lg brutal-btn-yellow text-xs font-mono font-black uppercase text-black flex items-center justify-center gap-1.5"
                     >
-                      CENTER HORIZONTALLY
+                      <span>CENTER HORIZONTALLY</span>
+                      <kbd className="px-1.5 py-0.5 rounded bg-black text-yellow-300 font-mono text-[10px]">C</kbd>
                     </button>
                   </div>
 
@@ -959,8 +1251,14 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
               )}
             </div>
           ) : (
-            <div className="brutal-card p-4 text-center text-slate-600 dark:text-slate-400 font-mono font-bold text-xs">
-              Click any text box on the canvas to customize typography, colors & position.
+            <div className="brutal-card p-4 text-center text-slate-600 dark:text-slate-400 font-mono font-bold text-xs space-y-2">
+              <p>Click any text box on the canvas or press <kbd className="px-1.5 py-0.5 rounded bg-black text-yellow-300 font-mono text-[10px]">Tab</kbd> to customize typography, colors & position.</p>
+              <button
+                onClick={() => setShowShortcutsModal(true)}
+                className="text-xs text-indigo-600 dark:text-yellow-300 underline font-bold"
+              >
+                View all keyboard shortcuts (?)
+              </button>
             </div>
           )}
 
@@ -980,12 +1278,165 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
 
         <button
           onClick={onProceed}
-          className="flex items-center gap-1.5 px-6 py-2.5 brutal-btn-yellow text-xs font-mono font-black uppercase text-black"
+          className="flex items-center gap-2 px-6 py-2.5 brutal-btn-yellow text-xs font-mono font-black uppercase text-black"
+          title="Continue to Export (Ctrl + Enter)"
         >
           <span>CONTINUE TO EXPORT</span>
+          <kbd className="hidden sm:inline-block px-1.5 py-0.5 rounded bg-black text-yellow-300 font-mono text-[10px]">Ctrl+Enter</kbd>
           <ArrowRight className="w-4 h-4 stroke-[3]" />
         </button>
       </div>
+
+      {/* Keyboard Shortcuts Cheat Sheet Modal */}
+      {showShortcutsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="brutal-card max-w-2xl w-full p-6 space-y-5 bg-white dark:bg-slate-900 border-4 border-black text-slate-900 dark:text-white shadow-[8px_8px_0px_0px_#000000]">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between border-b-2 border-black dark:border-slate-700 pb-3">
+              <div className="flex items-center gap-2">
+                <Keyboard className="w-5 h-5 text-yellow-500 stroke-[2.5]" />
+                <h2 className="text-base font-black uppercase font-mono tracking-tight">
+                  CANVAS STUDIO KEYBOARD SHORTCUTS
+                </h2>
+              </div>
+              <button
+                onClick={() => setShowShortcutsModal(false)}
+                className="p-1 rounded-lg bg-yellow-300 text-black border-2 border-black font-black hover:bg-yellow-400"
+              >
+                <X className="w-4 h-4 stroke-[3]" />
+              </button>
+            </div>
+
+            {/* Grid of Shortcut Categories */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+              
+              {/* Category 1: Positioning & Sizing */}
+              <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 border-2 border-black dark:border-slate-700 space-y-2">
+                <h3 className="font-black text-yellow-600 dark:text-yellow-400 uppercase text-[11px] flex items-center gap-1.5">
+                  <Move className="w-3.5 h-3.5" />
+                  <span>Position & Size</span>
+                </h3>
+                <ul className="space-y-1.5">
+                  <li className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300">Nudge position (0.2%)</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-black text-yellow-300 font-mono font-bold">↑ ↓ ← →</kbd>
+                  </li>
+                  <li className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300">Coarse nudge (1.0%)</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-black text-yellow-300 font-mono font-bold">Shift + Arrows</kbd>
+                  </li>
+                  <li className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300">Resize width / height</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-black text-yellow-300 font-mono font-bold">Alt + Arrows</kbd>
+                  </li>
+                  <li className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300">Center horizontally</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-black text-yellow-300 font-mono font-bold">C</kbd>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Category 2: Typography & Styling */}
+              <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 border-2 border-black dark:border-slate-700 space-y-2">
+                <h3 className="font-black text-yellow-600 dark:text-yellow-400 uppercase text-[11px] flex items-center gap-1.5">
+                  <Type className="w-3.5 h-3.5" />
+                  <span>Typography</span>
+                </h3>
+                <ul className="space-y-1.5">
+                  <li className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300">Font size (+2 / -2)</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-black text-yellow-300 font-mono font-bold">+ / -</kbd>
+                  </li>
+                  <li className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300">Toggle bold weight</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-black text-yellow-300 font-mono font-bold">B</kbd>
+                  </li>
+                  <li className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300">Toggle italic style</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-black text-yellow-300 font-mono font-bold">I</kbd>
+                  </li>
+                  <li className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300">Toggle UPPERCASE</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-black text-yellow-300 font-mono font-bold">U</kbd>
+                  </li>
+                  <li className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300">Align Left / Center / Right</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-black text-yellow-300 font-mono font-bold">L / E / R</kbd>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Category 3: Selection & Navigation */}
+              <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 border-2 border-black dark:border-slate-700 space-y-2">
+                <h3 className="font-black text-yellow-600 dark:text-yellow-400 uppercase text-[11px] flex items-center gap-1.5">
+                  <Crosshair className="w-3.5 h-3.5" />
+                  <span>Selection & Navigation</span>
+                </h3>
+                <ul className="space-y-1.5">
+                  <li className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300">Select next field</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-black text-yellow-300 font-mono font-bold">Tab</kbd>
+                  </li>
+                  <li className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300">Select prev field</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-black text-yellow-300 font-mono font-bold">Shift + Tab</kbd>
+                  </li>
+                  <li className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300">Deselect current field</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-black text-yellow-300 font-mono font-bold">Esc</kbd>
+                  </li>
+                  <li className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300">Switch recipient row</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-black text-yellow-300 font-mono font-bold">[ / ]</kbd>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Category 4: Actions & History */}
+              <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 border-2 border-black dark:border-slate-700 space-y-2">
+                <h3 className="font-black text-yellow-600 dark:text-yellow-400 uppercase text-[11px] flex items-center gap-1.5">
+                  <Sliders className="w-3.5 h-3.5" />
+                  <span>Actions & History</span>
+                </h3>
+                <ul className="space-y-1.5">
+                  <li className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300">Duplicate active field</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-black text-yellow-300 font-mono font-bold">Ctrl + D</kbd>
+                  </li>
+                  <li className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300">Delete active field</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-black text-yellow-300 font-mono font-bold">Del / Backspace</kbd>
+                  </li>
+                  <li className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300">Undo / Redo</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-black text-yellow-300 font-mono font-bold">Ctrl + Z / Y</kbd>
+                  </li>
+                  <li className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300">Continue to Export</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-black text-yellow-300 font-mono font-bold">Ctrl + Enter</kbd>
+                  </li>
+                </ul>
+              </div>
+
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between pt-3 border-t-2 border-black dark:border-slate-700">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 font-bold">
+                💡 Shortcuts are automatically paused when editing text in inputs.
+              </span>
+              <button
+                onClick={() => setShowShortcutsModal(false)}
+                className="brutal-btn-yellow px-4 py-1.5 text-xs font-black uppercase text-black"
+              >
+                GOT IT (ESC)
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );
