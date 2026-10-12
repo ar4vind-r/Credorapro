@@ -26,6 +26,8 @@ import {
   Undo2,
   Redo2,
   X,
+  ShieldCheck,
+  Hash,
 } from 'lucide-react';
 import type {
   TemplateFile,
@@ -371,33 +373,46 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
   // Auto initialize mappings if empty
   useEffect(() => {
     if (mappings.length === 0 && spreadsheet.headers.length > 0) {
-      const initialMappings: FieldMapping[] = spreadsheet.headers.map((h, i) => ({
-        id: `field_${h}_${Date.now()}`,
-        type: 'column',
-        columnName: h,
-        label: h,
-        style: {
-          fontFamily: i === 0 ? 'Cinzel, serif' : 'Playfair Display, serif',
-          fontSize: i === 0 ? 32 : 20,
-          fontWeight: i === 0 ? '700' : 'normal',
-          fontStyle: 'normal',
-          color: i === 0 ? '#fef08a' : '#f59e0b',
-          textAlign: 'center',
-          textTransform: i === 0 ? 'uppercase' : 'none',
-          letterSpacing: i === 0 ? 2 : 0,
-          lineHeight: 1.2,
-          x: 20,
-          y: 35 + i * 12,
-          width: 60,
-          height: 8,
-        },
-      }));
+      const initialMappings: FieldMapping[] = spreadsheet.headers.map((h, i) => {
+        const isPrivate = /email|phone|mobile|tel|address|contact|ssn|aadhar/i.test(h);
+        return {
+          id: `field_${h}_${Date.now()}`,
+          type: 'column',
+          columnName: h,
+          label: h,
+          showOnVerification: !isPrivate,
+          style: {
+            fontFamily: i === 0 ? 'Cinzel, serif' : 'Playfair Display, serif',
+            fontSize: i === 0 ? 32 : 20,
+            fontWeight: i === 0 ? '700' : 'normal',
+            fontStyle: 'normal',
+            color: i === 0 ? '#fef08a' : '#f59e0b',
+            textAlign: 'center',
+            textTransform: i === 0 ? 'uppercase' : 'none',
+            letterSpacing: i === 0 ? 2 : 0,
+            lineHeight: 1.2,
+            x: 20,
+            y: 35 + i * 12,
+            width: 60,
+            height: 8,
+          },
+        };
+      });
       commitMappingsWithHistory(initialMappings);
       if (initialMappings.length > 0) {
         setActiveFieldId(initialMappings[0].id);
       }
     }
   }, []);
+
+  // Toggle active field verification visibility
+  const toggleActiveFieldVerificationVisibility = (show: boolean) => {
+    if (!activeFieldId) return;
+    const updated = mappings.map((m) =>
+      m.id === activeFieldId ? { ...m, showOnVerification: show } : m
+    );
+    commitMappingsWithHistory(updated);
+  };
 
   // Update style property of active field
   const updateActiveFieldStyle = (key: keyof FieldStyle, value: any) => {
@@ -449,13 +464,15 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
     commitMappingsWithHistory(updated);
   };
 
-  // Add new field column mapping
+  // Add new field column mapping with smart privacy default
   const addColumnField = (colName: string) => {
+    const isPrivate = /email|phone|mobile|tel|address|contact|ssn|aadhar/i.test(colName);
     const newField: FieldMapping = {
       id: `field_${colName}_${Date.now()}`,
       type: 'column',
       columnName: colName,
       label: colName,
+      showOnVerification: !isPrivate,
       style: {
         fontFamily: 'Inter, sans-serif',
         fontSize: 24,
@@ -476,6 +493,33 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
     setActiveFieldId(newField.id);
   };
 
+  // Add Certificate No. Field (CRD-YYYY-NNNNNN)
+  const addCertificateNoField = () => {
+    const newField: FieldMapping = {
+      id: `field_cert_no_${Date.now()}`,
+      type: 'certificate_no',
+      label: 'Certificate No.',
+      showOnVerification: true,
+      style: {
+        fontFamily: 'Inter, sans-serif',
+        fontSize: 14,
+        fontWeight: '600',
+        fontStyle: 'normal',
+        color: '#ffffff',
+        textAlign: 'center',
+        textTransform: 'uppercase',
+        letterSpacing: 2,
+        lineHeight: 1,
+        x: 35,
+        y: 78,
+        width: 30,
+        height: 5,
+      },
+    };
+    commitMappingsWithHistory([...mappings, newField]);
+    setActiveFieldId(newField.id);
+  };
+
   // Add Custom Static Text Field
   const addCustomTextField = (presetText?: string, label?: string) => {
     const defaultText =
@@ -487,6 +531,7 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
       type: 'custom',
       customText: defaultText,
       label: label || 'Custom Text Paragraph',
+      showOnVerification: true,
       style: {
         fontFamily: 'Inter, sans-serif',
         fontSize: 18,
@@ -514,6 +559,7 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
       type: 'qr_code',
       columnName: spreadsheet.nameHeader,
       label: 'Verification QR Code',
+      showOnVerification: true,
       style: {
         fontFamily: 'Inter, sans-serif',
         fontSize: 12,
@@ -801,6 +847,8 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
                   displayVal = getRowValue(selectedRow, m.columnName) || `{{${m.columnName}}}`;
                 } else if (m.type === 'custom') {
                   displayVal = m.customText || 'Custom Text';
+                } else if (m.type === 'certificate_no') {
+                  displayVal = 'CRD-2026-X8K9M2';
                 }
 
                 if (m.style.textTransform === 'uppercase') displayVal = displayVal.toUpperCase();
@@ -901,10 +949,18 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
 
                 <button
                   onClick={addQrCodeField}
-                  className="brutal-btn-cyan px-2.5 py-1 text-xs font-mono flex items-center gap-1 text-black"
+                  className="brutal-btn-cyan px-2.5 py-1 text-xs font-mono flex items-center gap-1 text-black font-bold"
                 >
                   <QrCode className="w-3 h-3 stroke-[2.5]" />
                   <span>+ QR CODE</span>
+                </button>
+
+                <button
+                  onClick={addCertificateNoField}
+                  className="brutal-btn-yellow px-2.5 py-1 text-xs font-mono flex items-center gap-1 text-black font-bold"
+                >
+                  <Hash className="w-3 h-3 stroke-[2.5]" />
+                  <span>+ CERT NO.</span>
                 </button>
               </div>
             </div>
@@ -1245,6 +1301,45 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
                       <span>CENTER HORIZONTALLY</span>
                       <kbd className="px-1.5 py-0.5 rounded bg-black text-yellow-300 font-mono text-[10px]">C</kbd>
                     </button>
+                  </div>
+
+                  {/* Privacy & Verification Page Toggle */}
+                  <div className="pt-2 border-t-2 border-black dark:border-slate-700">
+                    <div className="flex items-center justify-between p-2.5 rounded-lg bg-yellow-50 dark:bg-slate-800/90 border-2 border-black dark:border-slate-700">
+                      <div className="flex flex-col pr-2">
+                        <span className="font-bold text-slate-900 dark:text-white text-xs flex items-center gap-1.5">
+                          <ShieldCheck className="w-3.5 h-3.5 text-indigo-600 dark:text-yellow-400 stroke-[2.5]" />
+                          <span>SHOW ON VERIFY PAGE</span>
+                        </span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
+                          {activeField.showOnVerification !== false
+                            ? 'Publicly visible during certificate verification'
+                            : 'Private field — hidden from verification'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          toggleActiveFieldVerificationVisibility(
+                            activeField.showOnVerification === false
+                          )
+                        }
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-black transition-colors duration-200 ease-in-out ${
+                          activeField.showOnVerification !== false
+                            ? 'bg-yellow-300'
+                            : 'bg-slate-300 dark:bg-slate-700'
+                        }`}
+                        title="Toggle field visibility on public verification page"
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-4 w-4 mt-0.5 ml-0.5 transform rounded-full bg-black shadow ring-0 transition duration-200 ease-in-out ${
+                            activeField.showOnVerification !== false
+                              ? 'translate-x-5'
+                              : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
                   </div>
 
                 </div>

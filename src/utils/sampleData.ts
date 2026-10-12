@@ -77,7 +77,7 @@ export function getDefaultSampleTemplate(): TemplateFile {
  */
 export const SAMPLE_SPREADSHEET: SpreadsheetData = {
   fileName: 'Solasta26_Participants.csv',
-  headers: ['Name', 'Event', 'College', 'Date', 'Certificate_ID'],
+  headers: ['Name', 'Event', 'College', 'Date', 'Email', 'Phone'],
   nameHeader: 'Name',
   rows: [
     {
@@ -85,28 +85,32 @@ export const SAMPLE_SPREADSHEET: SpreadsheetData = {
       Event: 'INNOVATION AUCTION',
       College: 'NSSCE',
       Date: '7th MARCH 2026',
-      Certificate_ID: 'SOL26-88192',
+      Email: 'alex@example.com',
+      Phone: '+91 98765 43210',
     },
     {
       Name: 'Sophia Montgomery',
       Event: 'INNOVATION AUCTION',
       College: 'STACS',
       Date: '7th MARCH 2026',
-      Certificate_ID: 'SOL26-88193',
+      Email: 'sophia@example.com',
+      Phone: '+91 98765 43211',
     },
     {
       Name: 'Marcus Vance',
       Event: 'INNOVATION AUCTION',
       College: 'NSSCE',
       Date: '7th MARCH 2026',
-      Certificate_ID: 'SOL26-88194',
+      Email: 'marcus@example.com',
+      Phone: '+91 98765 43212',
     },
     {
       Name: 'Elena Rostova',
       Event: 'INNOVATION AUCTION',
       College: 'STACS',
       Date: '7th MARCH 2026',
-      Certificate_ID: 'SOL26-88195',
+      Email: 'elena@example.com',
+      Phone: '+91 98765 43213',
     },
   ],
 };
@@ -121,6 +125,7 @@ export function getDefaultFieldMappings(): FieldMapping[] {
       type: 'column',
       columnName: 'Name',
       label: 'Recipient Name',
+      showOnVerification: true,
       style: {
         fontFamily: 'Cinzel, serif',
         fontSize: 54,
@@ -142,6 +147,7 @@ export function getDefaultFieldMappings(): FieldMapping[] {
       type: 'custom',
       customText: "has actively participated in the INNOVATION AUCTION competition as part of SOLASTA’26 by STACS, NSSCE on 7th MARCH 2026",
       label: 'Event Body Paragraph',
+      showOnVerification: true,
       style: {
         fontFamily: 'Inter, sans-serif',
         fontSize: 22,
@@ -163,6 +169,7 @@ export function getDefaultFieldMappings(): FieldMapping[] {
       type: 'qr_code',
       columnName: 'Name',
       label: 'Verification QR Code',
+      showOnVerification: true,
       style: {
         fontFamily: 'Inter, sans-serif',
         fontSize: 12,
@@ -177,6 +184,27 @@ export function getDefaultFieldMappings(): FieldMapping[] {
         y: 63,
         width: 8,
         height: 12,
+      },
+    },
+    {
+      id: 'field_cert_no',
+      type: 'certificate_no',
+      label: 'Certificate No.',
+      showOnVerification: true,
+      style: {
+        fontFamily: 'Inter, sans-serif',
+        fontSize: 13,
+        fontWeight: '600',
+        fontStyle: 'normal',
+        color: '#94a3b8',
+        textAlign: 'center',
+        textTransform: 'uppercase',
+        letterSpacing: 2,
+        lineHeight: 1,
+        x: 35,
+        y: 76,
+        width: 30,
+        height: 4,
       },
     },
   ];

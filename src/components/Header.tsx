@@ -1,5 +1,5 @@
 import React from 'react';
-import { Award, Zap, Moon, Sun, ShieldCheck } from 'lucide-react';
+import { Award, Zap, Moon, Sun, ShieldCheck, Search } from 'lucide-react';
 import type { AppStep } from '../types';
 
 interface HeaderProps {
@@ -10,6 +10,7 @@ interface HeaderProps {
   setDarkMode: (val: boolean) => void;
   hasTemplate: boolean;
   hasSpreadsheet: boolean;
+  onOpenVerification?: (certId?: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -20,6 +21,7 @@ export const Header: React.FC<HeaderProps> = ({
   setDarkMode,
   hasTemplate,
   hasSpreadsheet,
+  onOpenVerification,
 }) => {
   const steps: { id: AppStep; label: string; number: number }[] = [
     { id: 'upload', label: '1. UPLOAD', number: 1 },
@@ -89,6 +91,18 @@ export const Header: React.FC<HeaderProps> = ({
             <Zap className="w-3.5 h-3.5 fill-black" />
             <span>TRY DEMO SAMPLE</span>
           </button>
+
+          {onOpenVerification && (
+            <button
+              onClick={() => onOpenVerification()}
+              className="px-3 py-1.5 rounded-lg bg-yellow-300 hover:bg-yellow-400 text-black border-2 border-black font-mono font-black text-xs flex items-center gap-1.5 shadow-[2px_2px_0px_0px_#000000] transition-transform active:translate-x-0.5 active:translate-y-0.5"
+              title="Verify a certificate by certificate number"
+            >
+              <Search className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span className="hidden sm:inline">VERIFY CERT #</span>
+              <span className="sm:hidden">VERIFY</span>
+            </button>
+          )}
 
           <div className="hidden lg:flex items-center gap-1.5 text-xs font-mono font-bold px-3 py-1.5 rounded-lg bg-emerald-300 text-black border-2 border-black shadow-[2px_2px_0px_0px_#000000]">
             <ShieldCheck className="w-4 h-4 stroke-[2.5]" />

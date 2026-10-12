@@ -38,11 +38,12 @@ export interface FieldStyle {
 
 export interface FieldMapping {
   id: string;
-  type: 'column' | 'custom' | 'qr_code';
+  type: 'column' | 'custom' | 'qr_code' | 'certificate_no';
   columnName?: string;
   customText?: string;
   label: string;
   style: FieldStyle;
+  showOnVerification?: boolean; // Privacy control: true for published public verification, false for private
 }
 
 export interface MappingPreset {
@@ -53,9 +54,10 @@ export interface MappingPreset {
 
 export interface OutputOptions {
   format: 'pdf' | 'png' | 'jpg';
-  filenamePattern: string; // e.g., "{{name}}_Certificate"
+  filenamePattern: string; // e.g., "{{name}}_{{cert_id}}"
   pdfOrientation: 'landscape' | 'portrait' | 'auto';
   imageQuality: number; // 0.8 to 1.0
+  issuerName?: string;
 }
 
 export interface GeneratedCert {
@@ -65,7 +67,27 @@ export interface GeneratedCert {
   filename: string;
   dataUrl: string;
   blob: Blob;
+  details?: Record<string, any>;
 }
+
+export interface CertificateRecord {
+  cert_id: string; // primary key (CRD-YYYY-NNNNNN)
+  recipient_name: string;
+  details: Record<string, any>; // JSON from mapped columns with showOnVerification === true
+  issued_at: string; // ISO timestamp
+  issuer: string;
+  status: 'valid' | 'revoked';
+  revoked_reason?: string;
+}
+
+export type VerificationState =
+  | { status: 'idle' }
+  | { status: 'loading'; certId: string }
+  | { status: 'valid'; cert: CertificateRecord }
+  | { status: 'revoked'; cert: CertificateRecord }
+  | { status: 'not_found'; certId: string }
+  | { status: 'network_error'; error: string; certId: string }
+  | { status: 'unverified_fallback'; certId: string; recipientName?: string };
 
 export type AppStep = 'upload' | 'mapping' | 'generate' | 'complete';
 

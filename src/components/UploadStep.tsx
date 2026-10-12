@@ -10,6 +10,7 @@ import {
   Trash2,
   Table,
   Search,
+  ShieldCheck,
 } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
@@ -23,6 +24,7 @@ interface UploadStepProps {
   setSpreadsheet: (s: SpreadsheetData | null) => void;
   onProceed: () => void;
   onLoadSample: () => void;
+  onOpenVerification?: (certId?: string) => void;
 }
 
 export const UploadStep: React.FC<UploadStepProps> = ({
@@ -32,9 +34,11 @@ export const UploadStep: React.FC<UploadStepProps> = ({
   setSpreadsheet,
   onProceed,
   onLoadSample,
+  onOpenVerification,
 }) => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [manualCertId, setManualCertId] = useState('');
 
   // Handle Template File Selection (PNG/JPG/PDF)
   const handleTemplateFile = async (file: File) => {
@@ -407,6 +411,53 @@ export const UploadStep: React.FC<UploadStepProps> = ({
           </div>
         </div>
       )}
+
+      {/* Verify by Certificate Number Section on Main Site (for damaged or printed certificates) */}
+      <div className="brutal-card p-5 bg-white dark:bg-slate-900 border-2 border-black dark:border-slate-700 space-y-3 font-mono">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b-2 border-black/10 dark:border-slate-800 pb-2">
+          <div className="flex items-center gap-2">
+            <div className="p-1 rounded bg-yellow-300 border-2 border-black text-black">
+              <ShieldCheck className="w-4 h-4 stroke-[2.5]" />
+            </div>
+            <div>
+              <h3 className="font-black text-xs uppercase text-slate-900 dark:text-white">
+                VERIFY BY CERTIFICATE NUMBER
+              </h3>
+              <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                Checking a printed, damaged, or physical certificate? Enter its certificate number to query the official registry.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (manualCertId.trim() && onOpenVerification) {
+              onOpenVerification(manualCertId.trim().toUpperCase());
+            }
+          }}
+          className="flex flex-col sm:flex-row gap-2 max-w-xl"
+        >
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 stroke-[2.5]" />
+            <input
+              type="text"
+              value={manualCertId}
+              onChange={(e) => setManualCertId(e.target.value.toUpperCase())}
+              placeholder="e.g. CRD-2026-X8K9M2"
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-yellow-50/50 dark:bg-slate-800 border-2 border-black dark:border-slate-700 text-xs font-mono font-bold tracking-wider uppercase text-slate-900 dark:text-white focus:outline-none"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={!manualCertId.trim()}
+            className="px-5 py-2 brutal-btn-yellow text-xs font-black uppercase text-black disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+          >
+            VERIFY NOW
+          </button>
+        </form>
+      </div>
 
       {/* Action Footer Bar */}
       <div className="flex items-center justify-between p-5 brutal-card bg-yellow-100 dark:bg-slate-900 border-2 border-black dark:border-slate-700 text-slate-900 dark:text-white">

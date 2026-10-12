@@ -75,6 +75,13 @@ export function App() {
         setDarkMode={setDarkMode}
         hasTemplate={!!template}
         hasSpreadsheet={!!spreadsheet}
+        onOpenVerification={(certId) =>
+          setVerificationModal({
+            isOpen: true,
+            certId: (certId || '').trim().toUpperCase(),
+            recipientName: '',
+          })
+        }
       />
 
       {/* Main Workspace Area */}
@@ -87,6 +94,13 @@ export function App() {
             setSpreadsheet={setSpreadsheet}
             onProceed={() => setStep('mapping')}
             onLoadSample={handleLoadSample}
+            onOpenVerification={(certId) =>
+              setVerificationModal({
+                isOpen: true,
+                certId: (certId || '').trim().toUpperCase(),
+                recipientName: '',
+              })
+            }
           />
         )}
 

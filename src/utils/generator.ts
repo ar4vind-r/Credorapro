@@ -7,7 +7,10 @@ import type {
   FieldMapping,
   OutputOptions,
   GeneratedCert,
+  CertificateRecord,
 } from '../types';
+import { generateCertificateId } from './certId';
+import { batchPublishCertificates } from '../services/registry';
 
 /**
  * Case-insensitive helper to retrieve column values from a row dictionary.
@@ -123,10 +126,9 @@ export async function renderCertificateCanvas(
     const maxBoxHeightPx = (height / 100) * canvasHeight;
 
     if (mapping.type === 'qr_code') {
-      // Generate QR Code overlay pointing to live web app verification route
-      const recipientName = getRowValue(row, mapping.columnName || 'name') || 'Recipient';
+      // Short URL verification only: origin + '/?verify=' + CERT_ID (no names or details in URL)
       const origin = typeof window !== 'undefined' && window.location.origin ? window.location.origin : 'https://credora.vercel.app';
-      const verifyUrl = `${origin}/?verify=${certId}&name=${encodeURIComponent(recipientName)}`;
+      const verifyUrl = `${origin}/?verify=${certId}`;
 
       try {
         const qrSizePx = Math.max(60, Math.min(maxBoxWidthPx, maxBoxHeightPx));
@@ -145,16 +147,28 @@ export async function renderCertificateCanvas(
         const qrXpx = xPx + (maxBoxWidthPx - qrSizePx) / 2;
         const qrYpx = yPx + (maxBoxHeightPx - qrSizePx) / 2;
         ctx.drawImage(qrImg, qrXpx, qrYpx, qrSizePx, qrSizePx);
+
+        // Print certificate number in small legible text directly beneath the QR code
+        ctx.save();
+        const certLabelFontSize = Math.max(9, 10 * scaleFactor);
+        ctx.font = `600 ${certLabelFontSize}px monospace`;
+        ctx.fillStyle = color || '#000000';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(certId, qrXpx + qrSizePx / 2, qrYpx + qrSizePx + 4 * scaleFactor);
+        ctx.restore();
       } catch (err) {
         console.error('QR code generation error:', err);
       }
     } else {
-      // Text Field (Column Dynamic or Custom Static)
+      // Text Field: Column Dynamic, Custom Static, or Dedicated Certificate No.
       let textValue = '';
       if (mapping.type === 'column' && mapping.columnName) {
         textValue = getRowValue(row, mapping.columnName);
       } else if (mapping.type === 'custom') {
         textValue = mapping.customText || '';
+      } else if (mapping.type === 'certificate_no') {
+        textValue = certId;
       }
 
       if (!textValue) continue;
@@ -201,21 +215,25 @@ export async function renderCertificateCanvas(
 }
 
 /**
- * Format filename based on user pattern and row data.
+ * Format filename based on user pattern and row data, incorporating certId.
  */
 function buildFilename(
   pattern: string,
   row: Record<string, any>,
   index: number,
+  certId: string,
   format: string
 ): string {
-  let name = pattern;
+  let name = pattern || '{{name}}_{{cert_id}}';
 
   // Replace placeholders
   Object.keys(row).forEach((col) => {
     const val = String(row[col] || '');
     name = name.replace(new RegExp(`{{\\s*${col}\\s*}}`, 'gi'), val);
   });
+
+  // Replace certificate ID placeholders
+  name = name.replace(/{{\s*(cert_id|certificate_no|certid)\s*}}/gi, certId);
 
   // Fallback recipient name
   const recipient = getRowValue(row, 'name') || getRowValue(row, 'full_name') || `Recipient_${index + 1}`;
@@ -230,7 +248,7 @@ function buildFilename(
 }
 
 /**
- * Batch generate certificates for all rows and bundle into a JSZip file.
+ * Batch generate certificates for all rows, publish registry records, and bundle into JSZip.
  */
 export async function batchGenerateCertificates(
   template: TemplateFile,
@@ -241,12 +259,14 @@ export async function batchGenerateCertificates(
 ): Promise<{ zipBlob: Blob; certificates: GeneratedCert[] }> {
   const zip = new JSZip();
   const certificates: GeneratedCert[] = [];
+  const recordsToPublish: CertificateRecord[] = [];
   const totalRows = spreadsheet.rows.length;
   const MAX_PREVIEW_ITEMS = 24;
 
   for (let i = 0; i < totalRows; i++) {
     const row = spreadsheet.rows[i];
-    const certId = `CERT-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    // Generate secure non-guessable certificate ID (CRD-YYYY-NNNNNN)
+    const certId = generateCertificateId();
     const recipientName = getRowValue(row, spreadsheet.nameHeader) || getRowValue(row, 'name') || `Recipient ${i + 1}`;
 
     if (onProgress) {
@@ -254,9 +274,34 @@ export async function batchGenerateCertificates(
       onProgress(pct, `${i + 1}/${totalRows}: ${recipientName}`);
     }
 
+    // Build privacy-filtered published details for the registry
+    const publishedDetails: Record<string, any> = {};
+    mappings.forEach((m) => {
+      // Privacy rule: default false for email, phone, etc.; true for name, event, date, cert_no
+      if (m.showOnVerification !== false) {
+        if (m.type === 'column' && m.columnName) {
+          const val = getRowValue(row, m.columnName);
+          if (val) publishedDetails[m.label || m.columnName] = val;
+        } else if (m.type === 'custom' && m.customText) {
+          publishedDetails[m.label || 'Event Details'] = m.customText;
+        }
+      }
+    });
+
+    // Record for the database registry
+    const certRecord: CertificateRecord = {
+      cert_id: certId,
+      recipient_name: recipientName,
+      details: publishedDetails,
+      issued_at: new Date().toISOString(),
+      issuer: options.issuerName || 'Credora Verified Authority',
+      status: 'valid',
+    };
+    recordsToPublish.push(certRecord);
+
     // Render Canvas
     const canvas = await renderCertificateCanvas(template, row, mappings, certId);
-    const filename = buildFilename(options.filenamePattern, row, i, options.format);
+    const filename = buildFilename(options.filenamePattern, row, i, certId, options.format);
 
     let fileBuffer: ArrayBuffer;
     let crispDataUrl = '';
@@ -299,6 +344,7 @@ export async function batchGenerateCertificates(
         blob: fileBlob,
         dataUrl: crispDataUrl,
         rowIndex: i,
+        details: publishedDetails,
       });
     } else {
       const fileBlob = new Blob([fileBuffer], {
@@ -312,12 +358,20 @@ export async function batchGenerateCertificates(
         blob: fileBlob,
         dataUrl: '',
         rowIndex: i,
+        details: publishedDetails,
       });
     }
 
     // Explicitly release canvas memory
     canvas.width = 0;
     canvas.height = 0;
+  }
+
+  // Publish records to the registry
+  try {
+    await batchPublishCertificates(recordsToPublish);
+  } catch (err) {
+    console.error('Failed to publish certificate records to registry:', err);
   }
 
   const zipBlob = await zip.generateAsync({
