@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased] - 2026-10-12
 
+### Audited & Aligned with Flow Specs (AUDIT.md)
+- **Flow Spec Audit Execution:**
+  - Audited every user step and edge case across `flow-specs/01-bulk-create-certificates.md` and `flow-specs/02-verify-certificate.md` against the live React implementation.
+  - Generated `AUDIT.md` comprehensive matrix classifying steps as Deliberate, Drift, or Not Prototyped.
+- **Drift Remediated:**
+  - **FS01 Edge Case 2 (File Parsing Loading):** Added `isParsingTemplate` and `isParsingSpreadsheet` loading states to `src/components/UploadStep.tsx`, displaying animated spinners and descriptive progress text during PDF page rasterization and Excel workbook extraction.
+- **Deliberate Architectural Enhancements Synchronized in Specs:**
+  - **FS01 Step 4:** Documented cryptographic non-sequential certificate numbers (`CRD-YYYY-NNNNNN`), sub-QR code printing, tamper-resistant short URL encoding, and per-field privacy toggles.
+  - **FS01 Step 6:** Documented non-blocking chunked batch processing, live user cancellation, and row-level error isolation.
+  - **FS02 Entry Points:** Documented manual certificate number entry point from application header and home screen.
+  - **FS02 Step 1 & 2:** Documented cloud registry verification replacing client URL trust, with 6 verification states (Valid, Revoked, Not Found, Network Error, Loading, Unverified Fallback).
+- **Validation:** Clean pass with 0 issues on `node validate-flow-specs.js flow-specs/`.
+
 ### Added & Hardened (Application Hardening & Testing)
 - **Input Robustness:**
   - Handled 0-byte template and spreadsheet uploads with clear, actionable error messaging.

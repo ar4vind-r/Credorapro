@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   Download,
   Info,
+  RefreshCw,
 } from 'lucide-react';
 import Papa from 'papaparse';
 import type { TemplateFile, SpreadsheetData } from '../types';
@@ -39,6 +40,8 @@ export const UploadStep: React.FC<UploadStepProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [manualCertId, setManualCertId] = useState('');
+  const [isParsingTemplate, setIsParsingTemplate] = useState(false);
+  const [isParsingSpreadsheet, setIsParsingSpreadsheet] = useState(false);
 
   // Handle Template File Selection (PNG/JPG/PDF)
   const handleTemplateFile = async (file: File) => {
@@ -51,6 +54,7 @@ export const UploadStep: React.FC<UploadStepProps> = ({
     }
 
     const fileName = file.name.toLowerCase();
+    setIsParsingTemplate(true);
 
     if (fileName.endsWith('.pdf')) {
       try {
@@ -71,6 +75,8 @@ export const UploadStep: React.FC<UploadStepProps> = ({
         setErrorMsg(
           err.message || 'Could not rasterize PDF template. Ensure the PDF is not password-protected and re-upload.'
         );
+      } finally {
+        setIsParsingTemplate(false);
       }
     } else if (file.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(fileName)) {
       const reader = new FileReader();
@@ -85,11 +91,21 @@ export const UploadStep: React.FC<UploadStepProps> = ({
             width: img.naturalWidth || 1920,
             height: img.naturalHeight || 1080,
           });
+          setIsParsingTemplate(false);
+        };
+        img.onerror = () => {
+          setErrorMsg(`Could not decode image file '${file.name}'. Ensure it is a valid PNG or JPG.`);
+          setIsParsingTemplate(false);
         };
         img.src = dataUrl;
       };
+      reader.onerror = () => {
+        setErrorMsg(`Failed to read file '${file.name}'.`);
+        setIsParsingTemplate(false);
+      };
       reader.readAsDataURL(file);
     } else {
+      setIsParsingTemplate(false);
       setErrorMsg(`Unsupported file format '${file.name}'. Please upload a PNG, JPG, or PDF file.`);
     }
   };
@@ -105,6 +121,7 @@ export const UploadStep: React.FC<UploadStepProps> = ({
     }
 
     const fileName = file.name.toLowerCase();
+    setIsParsingSpreadsheet(true);
 
     if (fileName.endsWith('.csv')) {
       Papa.parse(file, {
@@ -112,6 +129,7 @@ export const UploadStep: React.FC<UploadStepProps> = ({
         encoding: 'utf-8',
         skipEmptyLines: 'greedy',
         complete: (results) => {
+          setIsParsingSpreadsheet(false);
           if (!results.data || results.data.length === 0) {
             setErrorMsg('The uploaded CSV file is empty. Please add a header row and attendee records.');
             return;
@@ -128,6 +146,7 @@ export const UploadStep: React.FC<UploadStepProps> = ({
           validateAndSetSpreadsheet(file.name, headers, results.data as Record<string, any>[]);
         },
         error: (err) => {
+          setIsParsingSpreadsheet(false);
           setErrorMsg(`Could not read CSV file: ${err.message}. Please check file encoding (UTF-8 recommended) and re-upload.`);
         },
       });
@@ -158,10 +177,17 @@ export const UploadStep: React.FC<UploadStepProps> = ({
           validateAndSetSpreadsheet(file.name, headers, jsonData);
         } catch (err: any) {
           setErrorMsg(`Could not parse Excel spreadsheet: ${err.message}. Export as CSV and re-upload.`);
+        } finally {
+          setIsParsingSpreadsheet(false);
         }
+      };
+      reader.onerror = () => {
+        setIsParsingSpreadsheet(false);
+        setErrorMsg(`Failed to read file '${file.name}'.`);
       };
       reader.readAsArrayBuffer(file);
     } else {
+      setIsParsingSpreadsheet(false);
       setErrorMsg(`Unsupported spreadsheet format '${file.name}'. Please upload a CSV (.csv) or Excel (.xlsx) file.`);
     }
   };
@@ -293,7 +319,17 @@ export const UploadStep: React.FC<UploadStepProps> = ({
             )}
           </div>
 
-          {!template ? (
+          {isParsingTemplate ? (
+            <div className="brutal-dashed min-h-[160px] p-6 flex flex-col items-center justify-center text-center">
+              <RefreshCw className="w-8 h-8 text-yellow-500 animate-spin mb-2 stroke-[2.5]" />
+              <span className="text-sm font-bold text-slate-900 dark:text-white">
+                Rasterizing template...
+              </span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Rendering PDF pages and measuring dimensions
+              </span>
+            </div>
+          ) : !template ? (
             <label
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
@@ -356,7 +392,17 @@ export const UploadStep: React.FC<UploadStepProps> = ({
             )}
           </div>
 
-          {!spreadsheet ? (
+          {isParsingSpreadsheet ? (
+            <div className="brutal-dashed min-h-[160px] p-6 flex flex-col items-center justify-center text-center">
+              <RefreshCw className="w-8 h-8 text-yellow-500 animate-spin mb-2 stroke-[2.5]" />
+              <span className="text-sm font-bold text-slate-900 dark:text-white">
+                Parsing spreadsheet data...
+              </span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Extracting attendee rows and column headers
+              </span>
+            </div>
+          ) : !spreadsheet ? (
             <label
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {

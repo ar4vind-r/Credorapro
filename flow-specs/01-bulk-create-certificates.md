@@ -48,11 +48,11 @@
 
 **What they want:** The organizer wants to include a standardized competition description paragraph and a scannable verification seal.
 
-**What they see:** The field palette on the Mapping Studio Screen offering options to add custom text, standard event description presets, and an authenticity QR code overlay.
+**What they see:** The field palette on the Mapping Studio Screen offering options to add custom text, standard event description presets, and an authenticity QR code overlay with per-field verification privacy toggles.
 
-**What they do:** The organizer selects an event preset paragraph, edits the text in the property inspector, and places a verification QR code in a corner.
+**What they do:** The organizer selects an event preset paragraph, edits the text in the property inspector, places a verification QR code, and configures which fields appear publicly on verification.
 
-**What happens:** The system wraps the multi-line text cleanly across the allocated width and renders a square QR code box linked to the verification URL.
+**What happens:** The system wraps the multi-line text cleanly across the allocated width, generates a unique non-sequential certificate number printed beneath the QR code, and renders the QR code encoding strictly a short lookup link without recipient names to prevent tampering.
 
 ### Step 5: Format Typography and Inspect Across Rows
 
@@ -72,7 +72,7 @@
 
 **What they do:** The organizer selects their preferred output format and initiates batch generation.
 
-**What happens:** The system begins rendering certificates sequentially in memory-managed batches, displaying a progress indicator with the current attendee name being processed.
+**What happens:** The system begins rendering certificates in non-blocking memory-managed batches, displaying a live progress indicator with the current attendee name being processed, an option to cancel generation without losing completed files, and fault isolation reporting any individual failed rows without aborting the batch.
 
 ### Step 7: Download Certificate Archive
 
