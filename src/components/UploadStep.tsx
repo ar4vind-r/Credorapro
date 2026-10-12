@@ -13,9 +13,9 @@ import {
   Info,
 } from 'lucide-react';
 import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
 import type { TemplateFile, SpreadsheetData } from '../types';
 import { renderPdfPageToDataUrl } from '../utils/pdfUtils';
+import { validateSpreadsheet } from '../utils/spreadsheet';
 
 interface UploadStepProps {
   template: TemplateFile | null;
@@ -43,6 +43,13 @@ export const UploadStep: React.FC<UploadStepProps> = ({
   // Handle Template File Selection (PNG/JPG/PDF)
   const handleTemplateFile = async (file: File) => {
     setErrorMsg(null);
+
+    // Empty file check
+    if (file.size === 0) {
+      setErrorMsg(`Template file '${file.name}' is empty (0 bytes). Please upload a valid image or PDF.`);
+      return;
+    }
+
     const fileName = file.name.toLowerCase();
 
     if (fileName.endsWith('.pdf')) {
@@ -90,11 +97,19 @@ export const UploadStep: React.FC<UploadStepProps> = ({
   // Handle Spreadsheet File Selection (CSV / XLSX)
   const handleSpreadsheetFile = (file: File) => {
     setErrorMsg(null);
+
+    // Empty file check
+    if (file.size === 0) {
+      setErrorMsg(`Spreadsheet file '${file.name}' is empty (0 bytes). Please upload a valid CSV or Excel file.`);
+      return;
+    }
+
     const fileName = file.name.toLowerCase();
 
     if (fileName.endsWith('.csv')) {
       Papa.parse(file, {
         header: true,
+        encoding: 'utf-8',
         skipEmptyLines: 'greedy',
         complete: (results) => {
           if (!results.data || results.data.length === 0) {
@@ -113,13 +128,15 @@ export const UploadStep: React.FC<UploadStepProps> = ({
           validateAndSetSpreadsheet(file.name, headers, results.data as Record<string, any>[]);
         },
         error: (err) => {
-          setErrorMsg(`Could not read CSV file: ${err.message}. Please check encoding and re-upload.`);
+          setErrorMsg(`Could not read CSV file: ${err.message}. Please check file encoding (UTF-8 recommended) and re-upload.`);
         },
       });
     } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         try {
+          // Dynamic import of xlsx library to optimize initial bundle size
+          const XLSX = await import('xlsx');
           const data = new Uint8Array(e.target?.result as ArrayBuffer);
           const workbook = XLSX.read(data, { type: 'array' });
           const firstSheetName = workbook.SheetNames[0];
@@ -155,46 +172,13 @@ export const UploadStep: React.FC<UploadStepProps> = ({
     headers: string[],
     rawRows: Record<string, any>[]
   ) => {
-    // Filter out completely blank rows
-    const rows = rawRows.filter((r) =>
-      Object.values(r).some((val) => String(val || '').trim() !== '')
-    );
-
-    if (rows.length === 0) {
-      setErrorMsg('No attendee rows found in spreadsheet. Ensure data rows exist beneath the header.');
+    const result = validateSpreadsheet(fileName, headers, rawRows);
+    if (!result.success) {
+      setErrorMsg(result.error);
       return;
     }
 
-    // Auto-detect 'name' column
-    const nameHeader =
-      headers.find((h) =>
-        ['name', 'full_name', 'fullname', 'student_name', 'recipient', 'person', 'attendee_name'].includes(
-          h.toLowerCase().trim()
-        )
-      ) || headers[0];
-
-    if (!nameHeader) {
-      setErrorMsg('Could not detect column titles. Ensure the first row of your spreadsheet contains column headers.');
-      return;
-    }
-
-    // Validate that every attendee row has a name
-    for (let i = 0; i < rows.length; i++) {
-      const rowVal = String(rows[i][nameHeader] || '').trim();
-      if (!rowVal) {
-        setErrorMsg(
-          `Row ${i + 2} has no recipient name under column '${nameHeader}'. Fix it in your spreadsheet and re-upload.`
-        );
-        return;
-      }
-    }
-
-    setSpreadsheet({
-      fileName,
-      headers,
-      rows,
-      nameHeader,
-    });
+    setSpreadsheet(result.data);
   };
 
   // Download Sample CSV format for immediate testing/reference
@@ -554,13 +538,18 @@ export const UploadStep: React.FC<UploadStepProps> = ({
           }}
           className="flex flex-col sm:flex-row gap-2 max-w-xl"
         >
+          <label htmlFor="home-cert-search-input" className="sr-only">
+            Certificate Number to Verify
+          </label>
           <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 stroke-[2.5]" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 stroke-[2.5]" aria-hidden="true" />
             <input
+              id="home-cert-search-input"
               type="text"
               value={manualCertId}
               onChange={(e) => setManualCertId(e.target.value.toUpperCase())}
               placeholder="e.g. CRD-2026-X8K9M2"
+              aria-label="Certificate number to verify"
               className="min-h-[44px] w-full pl-9 pr-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border-2 border-slate-900 dark:border-slate-700 text-xs font-mono font-bold tracking-wider uppercase text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
             />
           </div>

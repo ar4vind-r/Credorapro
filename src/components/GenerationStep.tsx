@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Download,
   Zap,
@@ -9,8 +9,9 @@ import {
   Settings,
   FileCheck,
   Check,
+  AlertTriangle,
+  XCircle,
 } from 'lucide-react';
-import confetti from 'canvas-confetti';
 import { saveAs } from 'file-saver';
 import type {
   TemplateFile,
@@ -18,6 +19,7 @@ import type {
   FieldMapping,
   OutputOptions,
   GeneratedCert,
+  FailedRowError,
 } from '../types';
 import { batchGenerateCertificates } from '../utils/generator';
 
@@ -50,14 +52,20 @@ export const GenerationStep: React.FC<GenerationStepProps> = ({
     zipBlob: Blob;
     certificates: GeneratedCert[];
   } | null>(null);
+  const [failedRows, setFailedRows] = useState<FailedRowError[]>([]);
+  const [wasCancelled, setWasCancelled] = useState(false);
 
   const [previewCert, setPreviewCert] = useState<GeneratedCert | null>(null);
+  const cancelRequestedRef = useRef(false);
 
   // Trigger batch generation
   const handleStartGeneration = async () => {
     setIsGenerating(true);
     setProgress(0);
     setGeneratedResult(null);
+    setFailedRows([]);
+    setWasCancelled(false);
+    cancelRequestedRef.current = false;
 
     try {
       const result = await batchGenerateCertificates(
@@ -68,20 +76,39 @@ export const GenerationStep: React.FC<GenerationStepProps> = ({
         (pct, item) => {
           setProgress(pct);
           setCurrentItem(item);
-        }
+        },
+        () => cancelRequestedRef.current
       );
 
-      setGeneratedResult(result);
+      if (result.cancelled) {
+        setWasCancelled(true);
+      }
 
-      // Trigger celebration confetti
-      confetti({
-        particleCount: 60,
-        spread: 60,
-        origin: { y: 0.6 },
-        colors: ['#facc15', '#22d3ee', '#10b981', '#000000'],
+      setGeneratedResult({
+        zipBlob: result.zipBlob,
+        certificates: result.certificates,
       });
+
+      if (result.failedRows && result.failedRows.length > 0) {
+        setFailedRows(result.failedRows);
+      }
+
+      // Trigger celebration confetti if completed without full failure
+      if (!result.cancelled && result.certificates.length > 0) {
+        try {
+          const { default: confetti } = await import('canvas-confetti');
+          confetti({
+            particleCount: 50,
+            spread: 60,
+            origin: { y: 0.6 },
+            colors: ['#facc15', '#22d3ee', '#10b981', '#000000'],
+          });
+        } catch {
+          // Ignore confetti import error
+        }
+      }
     } catch (err: any) {
-      alert(`Generation failed: ${err.message}`);
+      alert(`Generation encountered an error: ${err.message}`);
     } finally {
       setIsGenerating(false);
     }
@@ -142,16 +169,16 @@ export const GenerationStep: React.FC<GenerationStepProps> = ({
             
             {/* Format Selector */}
             <div className="space-y-2">
-              <label className="font-bold text-slate-900 dark:text-slate-200 block text-xs font-mono uppercase">
+              <label htmlFor="format-select" className="font-bold text-slate-900 dark:text-slate-200 block text-xs font-mono uppercase">
                 Output Format:
               </label>
-              <div className="grid grid-cols-3 gap-2">
+              <div id="format-select" role="group" aria-label="Output format selection" className="grid grid-cols-3 gap-2">
                 {(['pdf', 'png', 'jpg'] as const).map((fmt) => (
                   <button
                     key={fmt}
                     type="button"
                     onClick={() => setOptions({ ...options, format: fmt })}
-                    className={`min-h-[44px] rounded-lg font-mono text-xs font-bold uppercase border-2 transition-colors flex items-center justify-center ${
+                    className={`min-h-[44px] rounded-lg font-mono text-xs font-bold uppercase border-2 transition-colors flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 ${
                       options.format === fmt
                         ? 'bg-yellow-400 text-slate-950 border-slate-950 font-black'
                         : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-900/40 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
@@ -165,10 +192,11 @@ export const GenerationStep: React.FC<GenerationStepProps> = ({
 
             {/* Naming Pattern */}
             <div className="space-y-2">
-              <label className="font-bold text-slate-900 dark:text-slate-200 block text-xs font-mono uppercase">
+              <label htmlFor="filename-pattern-input" className="font-bold text-slate-900 dark:text-slate-200 block text-xs font-mono uppercase">
                 Filename Pattern:
               </label>
               <input
+                id="filename-pattern-input"
                 type="text"
                 value={options.filenamePattern}
                 onChange={(e) => setOptions({ ...options, filenamePattern: e.target.value })}
@@ -180,10 +208,11 @@ export const GenerationStep: React.FC<GenerationStepProps> = ({
 
             {/* Quality Resolution */}
             <div className="space-y-2">
-              <label className="font-bold text-slate-900 dark:text-slate-200 block text-xs font-mono uppercase">
+              <label htmlFor="quality-select" className="font-bold text-slate-900 dark:text-slate-200 block text-xs font-mono uppercase">
                 Export Quality:
               </label>
               <select
+                id="quality-select"
                 value={options.imageQuality}
                 onChange={(e) => setOptions({ ...options, imageQuality: Number(e.target.value) })}
                 className="min-h-[44px] w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border-2 border-slate-900 dark:border-slate-700 text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
@@ -217,9 +246,14 @@ export const GenerationStep: React.FC<GenerationStepProps> = ({
         </div>
       )}
 
-      {/* 3. Generating Progress Card with Active Count & Shimmer */}
+      {/* 3. Generating Progress Card with Active Live Region & Cancellation */}
       {isGenerating && (
-        <div className="brutal-card p-6 text-center space-y-4 bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-slate-700">
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className="brutal-card p-6 text-center space-y-4 bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-slate-700"
+        >
           <div className="inline-flex p-3 rounded-full bg-yellow-400 text-slate-950 border-2 border-slate-950">
             <RefreshCcw className="w-6 h-6 animate-spin stroke-[2.5]" />
           </div>
@@ -240,13 +274,67 @@ export const GenerationStep: React.FC<GenerationStepProps> = ({
               className="h-full bg-yellow-400 rounded-full transition-all duration-200"
             />
           </div>
+
+          {/* Cancel Button */}
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                cancelRequestedRef.current = true;
+              }}
+              className="min-h-[44px] px-5 py-2 rounded-lg border-2 border-rose-600 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 font-mono text-xs font-bold transition-colors inline-flex items-center gap-1.5"
+            >
+              <XCircle className="w-4 h-4" />
+              <span>Cancel Generation</span>
+            </button>
+          </div>
         </div>
       )}
 
-      {/* 4. Results Grid on Batch Complete */}
+      {/* 4. Results Section on Batch Complete */}
       {generatedResult && (
         <div className="space-y-6">
           
+          {/* Cancellation Notice if stopped early */}
+          {wasCancelled && (
+            <div
+              role="alert"
+              className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-600 text-amber-950 dark:text-amber-200 text-xs font-mono flex items-center gap-2"
+            >
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+              <span>
+                Generation was cancelled by user. Completed {generatedResult.certificates.length} certificates have been packaged in the ZIP archive.
+              </span>
+            </div>
+          )}
+
+          {/* Skipped Rows Reporting */}
+          {failedRows.length > 0 && (
+            <div
+              role="alert"
+              className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-600 text-rose-950 dark:text-rose-200 text-xs font-mono space-y-2"
+            >
+              <div className="flex items-center gap-2 font-bold text-sm">
+                <AlertTriangle className="w-4 h-4 text-rose-600" />
+                <span>{failedRows.length} Row(s) Skipped Due to Render Errors:</span>
+              </div>
+              <p className="text-[11px] font-sans text-slate-700 dark:text-slate-300">
+                The remaining certificates were successfully bundled. Please review the failed entries:
+              </p>
+              <div className="max-h-36 overflow-y-auto space-y-1 pr-1">
+                {failedRows.map((f, idx) => (
+                  <div
+                    key={idx}
+                    className="p-2 bg-white dark:bg-slate-900 rounded border border-rose-600/30 flex justify-between gap-2"
+                  >
+                    <span className="font-bold">Row {f.rowIndex} ({f.recipientName}):</span>
+                    <span className="text-rose-600 dark:text-rose-400">{f.error}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Success Callout Bar */}
           <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border-2 border-emerald-600 dark:border-emerald-700 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -295,7 +383,7 @@ export const GenerationStep: React.FC<GenerationStepProps> = ({
                   {cert.dataUrl ? (
                     <img
                       src={cert.dataUrl}
-                      alt={cert.recipientName}
+                      alt={`Certificate preview for ${cert.recipientName}`}
                       className="w-full h-full object-contain"
                     />
                   ) : (
@@ -356,6 +444,7 @@ export const GenerationStep: React.FC<GenerationStepProps> = ({
         <div
           role="dialog"
           aria-modal="true"
+          aria-label={`Preview of ${previewCert.filename}`}
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 font-mono"
         >
           <div className="brutal-card max-w-4xl w-full p-6 space-y-4 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-4 border-slate-900 dark:border-slate-700">
@@ -373,7 +462,7 @@ export const GenerationStep: React.FC<GenerationStepProps> = ({
             <div className="rounded-lg overflow-hidden bg-slate-950 border-2 border-slate-900 aspect-[16/9]">
               <img
                 src={previewCert.dataUrl}
-                alt={previewCert.recipientName}
+                alt={`Expanded certificate view for ${previewCert.recipientName}`}
                 className="w-full h-full object-contain"
               />
             </div>

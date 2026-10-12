@@ -115,6 +115,7 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
     <div
       role="dialog"
       aria-modal="true"
+      aria-labelledby="verification-dialog-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 font-mono overflow-y-auto"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -126,11 +127,11 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
         {/* Top Header Bar */}
         <div className="flex items-center justify-between pb-3 border-b-2 border-slate-900/10 dark:border-slate-800">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-yellow-400 border-2 border-slate-950 text-slate-950">
+            <div className="p-1.5 rounded-lg bg-yellow-400 border-2 border-slate-950 text-slate-950" aria-hidden="true">
               <ShieldCheck className="w-5 h-5 stroke-[2.5]" />
             </div>
             <div>
-              <span className="font-extrabold text-sm uppercase tracking-wider block">
+              <span id="verification-dialog-title" className="font-extrabold text-sm uppercase tracking-wider block">
                 Credora Registry
               </span>
               <span className="text-[10px] text-slate-500 font-bold block font-sans">
@@ -142,8 +143,9 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="min-h-[44px] min-w-[44px] p-2 rounded-lg border-2 border-slate-900 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-900 dark:text-white transition-colors flex items-center justify-center"
+            className="min-h-[44px] min-w-[44px] p-2 rounded-lg border-2 border-slate-900 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-900 dark:text-white transition-colors flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400"
             title="Close Verification Window"
+            aria-label="Close Verification Window"
           >
             <X className="w-4 h-4 stroke-[3]" />
           </button>
@@ -205,8 +207,9 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleCopyId(state.cert.cert_id)}
-                  className="min-h-[36px] min-w-[36px] p-1.5 rounded bg-white dark:bg-slate-700 hover:bg-slate-100 border-2 border-slate-900 text-slate-900 dark:text-white flex items-center justify-center"
+                  className="min-h-[36px] min-w-[36px] p-1.5 rounded bg-white dark:bg-slate-700 hover:bg-slate-100 border-2 border-slate-900 text-slate-900 dark:text-white flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400"
                   title="Copy Certificate ID"
+                  aria-label="Copy Certificate ID to clipboard"
                 >
                   {copied ? <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
@@ -460,19 +463,21 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
            ========================================================================= */}
         <div className="pt-3 border-t-2 border-slate-900/10 dark:border-slate-800">
           <form onSubmit={handleSearchSubmit} className="space-y-2">
-            <label className="text-[11px] font-bold uppercase text-slate-700 dark:text-slate-300 flex items-center justify-between">
+            <label htmlFor="modal-cert-search-input" className="text-[11px] font-bold uppercase text-slate-700 dark:text-slate-300 flex items-center justify-between">
               <span>Verify by Certificate Number</span>
               <span className="text-[9px] text-slate-500">e.g. CRD-2026-X8K9M2</span>
             </label>
 
             <div className="flex gap-2">
               <div className="relative flex-1">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" aria-hidden="true" />
                 <input
+                  id="modal-cert-search-input"
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value.toUpperCase())}
                   placeholder="CRD-YYYY-NNNNNN"
+                  aria-label="Certificate number to verify"
                   className="min-h-[44px] w-full pl-9 pr-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border-2 border-slate-900 dark:border-slate-700 text-xs font-mono font-bold tracking-wider uppercase text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
                 />
               </div>

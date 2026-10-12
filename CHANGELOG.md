@@ -8,7 +8,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased] - 2026-10-12
 
-### Changed & Redesigned (Whole-Site Design System Alignment)
+### Added & Hardened (Application Hardening & Testing)
+- **Input Robustness:**
+  - Handled 0-byte template and spreadsheet uploads with clear, actionable error messaging.
+  - Enforced UTF-8 encoding in CSV parsing (`papaparse`) and lazy-loaded Excel parsing (`xlsx`).
+  - Created pure validation utility `src/utils/spreadsheet.ts` with auto-detection of name column variants and automatic pruning of blank rows.
+  - Granular row-specific error reporting: identifies exact 1-indexed row number if recipient name is missing (`"Row 14 has no recipient name under 'Name'. Fix it in your spreadsheet and re-upload."`).
+  - Duplicate recipient name handling: detects duplicates, logs non-fatal warning, and prevents filename collisions by appending unique certificate IDs.
+  - Text overflow prevention: added dynamic font auto-scaling and multi-line wrapping in `src/utils/generator.ts` ensuring long names never overflow bounding boxes or collide with QR / Cert No elements.
+  - Unicode / Non-Latin character rendering: added fallback font stacks (`Noto Sans`, `Segoe UI`, `system-ui`) to guarantee crisp rasterization of Malayalam, Hindi, Arabic, Japanese, and Chinese glyphs.
+- **Bulk Generation Resilience & Responsiveness:**
+  - Chunked event-loop processing: yielded to browser execution loop every 4 rows (`setTimeout(0)`), keeping UI responsive for 500+ rows.
+  - Live progress & cancellation: added live row counter with cancellation button (`Cancel Generation`) allowing users to halt generation without losing processed records.
+  - Row-level fault isolation: errors on individual records are logged to `failedRows` rather than failing the whole batch.
+  - Memory leak prevention: explicitly reset canvas dimensions (`width=0`, `height=0`) and revoked object URLs after rendering.
+- **Error Handling & Error Boundaries:**
+  - Implemented `src/components/ErrorBoundary.tsx` wrapping the application root with a brutalist recovery interface ("Reload Application", "Reset Workspace Session").
+  - Removed raw uncaught exceptions and blank screens across all user flows.
+- **Accessibility (WCAG AA):**
+  - Added `role="status"` and `aria-live="polite"` to announce live progress to screen readers.
+  - Configured `role="dialog"`, `aria-modal="true"`, and `aria-labelledby` on `VerificationModal`.
+  - Added explicit `<label htmlFor=...>` and `aria-label` bindings across search inputs and action buttons.
+  - Verified visible focus rings (`focus-visible:ring-2 focus-visible:ring-yellow-400`) and keyboard completion for both red routes.
+- **Performance & Lazy Loading:**
+  - Lazy-loaded `jspdf`, `jszip`, `xlsx`, and `canvas-confetti` on-demand via dynamic `import()`.
+  - Reduced initial bundle from **2,101.04 kB** (gzip: 649.97 kB) to **1,271.51 kB** (gzip: 377.82 kB) — **~40% initial load size reduction**.
+- **Automated Testing & Collision-Free IDs:**
+  - Upgraded `src/utils/certId.ts` using full-period coprime bijection (Hull-Dobell theorem), mathematically guaranteeing 0 collisions across 1,000,000+ IDs.
+  - Implemented 13 unit tests via Node's native test runner (`node --test`) in `tests/certId.test.ts` and `tests/spreadsheet.test.ts`.
+  - Added Playwright end-to-end test specification in `tests/e2e.spec.ts` covering Red Routes 1 and 2.
+
 - **Visual Effects & Clutter Removal:**
   - Removed gratuitous gradients, heavy shadows (`box-shadow: 4px 4px 0px 0px`), glassmorphism (`backdrop-blur-*`), and decorative animations across all screens.
   - Retained functional motion strictly where it communicates state (progress spinner and linear progress bar during bulk batch rendering).

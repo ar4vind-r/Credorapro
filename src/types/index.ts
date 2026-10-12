@@ -70,6 +70,19 @@ export interface GeneratedCert {
   details?: Record<string, any>;
 }
 
+export interface FailedRowError {
+  rowIndex: number;
+  recipientName: string;
+  error: string;
+}
+
+export interface BatchGenerationResult {
+  zipBlob: Blob;
+  certificates: GeneratedCert[];
+  failedRows: FailedRowError[];
+  cancelled?: boolean;
+}
+
 export interface CertificateRecord {
   cert_id: string; // primary key (CRD-YYYY-NNNNNN)
   recipient_name: string;
