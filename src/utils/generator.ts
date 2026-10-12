@@ -169,9 +169,10 @@ export async function renderCertificateCanvas(
     if (mapping.type === 'qr_code') {
       // Short URL verification only: origin + '/?verify=' + CERT_ID
       const origin =
-        typeof window !== 'undefined' && window.location.origin
+        (typeof import.meta !== 'undefined' && import.meta.env?.VITE_APP_URL) ||
+        (typeof window !== 'undefined' && window.location.origin
           ? window.location.origin
-          : 'https://credora.vercel.app';
+          : 'https://credora.vercel.app');
       const verifyUrl = `${origin}/?verify=${certId}`;
 
       try {

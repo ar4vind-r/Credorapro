@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased] - 2026-10-12
 
+### Deployment & Submission Readiness
+- **Comprehensive Project README:** Created exhaustive `README.md` documenting Credora's purpose, local-first privacy architecture, precision canvas tooling, cryptographic ID format (`CRD-YYYY-NNNNNN`), cloud registry setup, step-by-step user guide, automated tests, and known limitations.
+- **3-Minute Walkthrough Script:** Created `DEMO_SCRIPT.md` with a rehearsed cue-by-cue script covering sample load, canvas nudging, chunked export, QR mobile verification, and fake ID fraud detection.
+- **Environment & Secrets Audit:** Standardized `.env.example` with dummy values for `VITE_APP_URL` and Firebase credentials. Verified that `.env` is excluded via `.gitignore` and no API keys or secrets are committed.
+- **Vercel & Netlify Deployment Configurations:** Added `vercel.json` and `netlify.toml` with Single-Page Application (SPA) fallback rewrites and static asset caching so deep verification routes (`/?verify=ID`) reload cleanly.
+- **Dynamic Deployed Origin Parity:** Updated `src/utils/generator.ts` to respect `VITE_APP_URL` with dynamic fallback to `window.location.origin`, ensuring QR code destinations always match the deployed production origin.
+- **Final Health Check:** `npm run build` compiled cleanly with 0 TypeScript errors; `npm test` executed 13/13 passing unit tests in < 100ms.
+
 ### Audited & Aligned with Flow Specs (AUDIT.md)
 - **Flow Spec Audit Execution:**
   - Audited every user step and edge case across `flow-specs/01-bulk-create-certificates.md` and `flow-specs/02-verify-certificate.md` against the live React implementation.
