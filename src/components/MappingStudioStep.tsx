@@ -11,11 +11,17 @@ import {
   Upload,
   Plus,
   ArrowRight,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft as ArrowLeftIcon,
+  ArrowRight as ArrowRightIcon,
   Eye,
   Sliders,
   Move,
   Type,
   FileText,
+  Keyboard,
+  Crosshair,
 } from 'lucide-react';
 import type {
   TemplateFile,
@@ -80,6 +86,7 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [previewWidth, setPreviewWidth] = useState(1000);
+  const [nudgeStep, setNudgeStep] = useState<number>(0.2); // 0.2% for micro, 1.0% for fast
 
   const canvasContainerRef = useRef<HTMLDivElement>(null);
 
@@ -102,6 +109,53 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
 
     return () => resizeObserver.disconnect();
   }, []);
+
+  // Keyboard Arrow Keys Precise Nudging Listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!activeFieldId) return;
+
+      // Don't intercept arrow keys if user is typing in an input, textarea, or select
+      const targetTag = (e.target as HTMLElement)?.tagName?.toUpperCase();
+      if (targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'SELECT') {
+        return;
+      }
+
+      const currentField = mappings.find((m) => m.id === activeFieldId);
+      if (!currentField) return;
+
+      const step = e.shiftKey ? 1.0 : 0.2;
+
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const newY = Math.max(0, Math.round((currentField.style.y - step) * 10) / 10);
+        setMappings((prev) =>
+          prev.map((m) => (m.id === activeFieldId ? { ...m, style: { ...m.style, y: newY } } : m))
+        );
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const newY = Math.min(95, Math.round((currentField.style.y + step) * 10) / 10);
+        setMappings((prev) =>
+          prev.map((m) => (m.id === activeFieldId ? { ...m, style: { ...m.style, y: newY } } : m))
+        );
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const newX = Math.max(0, Math.round((currentField.style.x - step) * 10) / 10);
+        setMappings((prev) =>
+          prev.map((m) => (m.id === activeFieldId ? { ...m, style: { ...m.style, x: newX } } : m))
+        );
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        const newX = Math.min(95, Math.round((currentField.style.x + step) * 10) / 10);
+        setMappings((prev) =>
+          prev.map((m) => (m.id === activeFieldId ? { ...m, style: { ...m.style, x: newX } } : m))
+        );
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeFieldId, mappings]);
 
   // Auto initialize mappings if empty
   useEffect(() => {
@@ -140,6 +194,20 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
     setMappings((prev) =>
       prev.map((m) => (m.id === activeFieldId ? { ...m, style: { ...m.style, [key]: value } } : m))
     );
+  };
+
+  // Nudge direction helper (for on-screen precision buttons)
+  const nudgeField = (dir: 'up' | 'down' | 'left' | 'right', step: number = nudgeStep) => {
+    if (!activeField) return;
+    if (dir === 'up') {
+      updateActiveFieldStyle('y', Math.max(0, Math.round((activeField.style.y - step) * 10) / 10));
+    } else if (dir === 'down') {
+      updateActiveFieldStyle('y', Math.min(95, Math.round((activeField.style.y + step) * 10) / 10));
+    } else if (dir === 'left') {
+      updateActiveFieldStyle('x', Math.max(0, Math.round((activeField.style.x - step) * 10) / 10));
+    } else if (dir === 'right') {
+      updateActiveFieldStyle('x', Math.min(95, Math.round((activeField.style.x + step) * 10) / 10));
+    }
   };
 
   // Update custom text content of active field
@@ -433,14 +501,20 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
         {/* Left Column: Interactive Canvas Container (8 cols) */}
         <div className="lg:col-span-7 xl:col-span-8 space-y-3">
           <div className="brutal-card p-4 space-y-3">
-            <div className="flex items-center justify-between text-xs font-mono font-bold text-slate-900 dark:text-slate-200">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono font-bold text-slate-900 dark:text-slate-200">
               <span className="flex items-center gap-1.5">
                 <Move className="w-4 h-4" />
-                <span>DRAG TEXT BOXES TO POSITION FIELDS (TOUCH SUPPORTED)</span>
+                <span>DRAG OR USE ARROW KEYS (↑ ↓ ← →) TO POSITION</span>
               </span>
-              <span className="bg-yellow-300 text-black border-2 border-black px-2 py-0.5 rounded font-black text-[11px] uppercase">
-                {template.name}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded bg-cyan-100 dark:bg-slate-800 text-slate-800 dark:text-cyan-300 border border-black dark:border-slate-700 text-[10px]">
+                  <Keyboard className="w-3 h-3" />
+                  <span>Shift+Arrows for 1%</span>
+                </span>
+                <span className="bg-yellow-300 text-black border-2 border-black px-2 py-0.5 rounded font-black text-[11px] uppercase">
+                  {template.name}
+                </span>
+              </div>
             </div>
 
             <div
@@ -517,8 +591,8 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
                     )}
 
                     {isActive && (
-                      <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded bg-yellow-300 text-black border-2 border-black font-mono font-black text-[9px] uppercase shadow-[2px_2px_0px_0px_#000000]">
-                        {m.label}
+                      <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded bg-yellow-300 text-black border-2 border-black font-mono font-black text-[9px] uppercase shadow-[2px_2px_0px_0px_#000000] whitespace-nowrap">
+                        {m.label} ({m.style.x}%, {m.style.y}%)
                       </div>
                     )}
                   </div>
@@ -608,8 +682,8 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
               <div className="flex items-center justify-between pb-2.5 border-b-2 border-black dark:border-slate-700">
                 <div className="flex items-center gap-2">
                   <Sliders className="w-4 h-4 text-slate-900 dark:text-yellow-300 stroke-[2.5]" />
-                  <span className="font-black text-slate-900 dark:text-white uppercase">
-                    FIELD: {activeField.label}
+                  <span className="font-black text-slate-900 dark:text-white uppercase truncate max-w-[180px]">
+                    {activeField.label}
                   </span>
                 </div>
 
@@ -620,6 +694,113 @@ export const MappingStudioStep: React.FC<MappingStudioStepProps> = ({
                 >
                   <Trash2 className="w-4 h-4 stroke-[2.5]" />
                 </button>
+              </div>
+
+              {/* Precision Arrow Nudge & Coordinates Panel */}
+              <div className="p-2.5 rounded-lg bg-yellow-100/70 dark:bg-slate-800/80 border-2 border-black dark:border-slate-700 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
+                    <Crosshair className="w-3.5 h-3.5 text-yellow-600 dark:text-yellow-400" />
+                    <span>NUDGE POSITION:</span>
+                  </span>
+
+                  <div className="flex items-center gap-1 text-[10px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setNudgeStep(0.2)}
+                      className={`px-1.5 py-0.5 rounded border border-black ${
+                        nudgeStep === 0.2
+                          ? 'bg-yellow-300 text-black font-black'
+                          : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      Fine (0.2%)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNudgeStep(1.0)}
+                      className={`px-1.5 py-0.5 rounded border border-black ${
+                        nudgeStep === 1.0
+                          ? 'bg-yellow-300 text-black font-black'
+                          : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      Coarse (1%)
+                    </button>
+                  </div>
+                </div>
+
+                {/* 4 Direction Nudge Buttons */}
+                <div className="flex items-center justify-between pt-1">
+                  <div className="flex flex-col items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => nudgeField('up')}
+                      className="p-1 rounded bg-white dark:bg-slate-900 hover:bg-yellow-300 dark:hover:bg-yellow-400 hover:text-black border-2 border-black transition-colors"
+                      title="Nudge Up (Arrow Up)"
+                    >
+                      <ArrowUp className="w-3.5 h-3.5 stroke-[2.5]" />
+                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => nudgeField('left')}
+                        className="p-1 rounded bg-white dark:bg-slate-900 hover:bg-yellow-300 dark:hover:bg-yellow-400 hover:text-black border-2 border-black transition-colors"
+                        title="Nudge Left (Arrow Left)"
+                      >
+                        <ArrowLeftIcon className="w-3.5 h-3.5 stroke-[2.5]" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => nudgeField('down')}
+                        className="p-1 rounded bg-white dark:bg-slate-900 hover:bg-yellow-300 dark:hover:bg-yellow-400 hover:text-black border-2 border-black transition-colors"
+                        title="Nudge Down (Arrow Down)"
+                      >
+                        <ArrowDown className="w-3.5 h-3.5 stroke-[2.5]" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => nudgeField('right')}
+                        className="p-1 rounded bg-white dark:bg-slate-900 hover:bg-yellow-300 dark:hover:bg-yellow-400 hover:text-black border-2 border-black transition-colors"
+                        title="Nudge Right (Arrow Right)"
+                      >
+                        <ArrowRightIcon className="w-3.5 h-3.5 stroke-[2.5]" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Numeric Inputs */}
+                  <div className="grid grid-cols-2 gap-2 text-left">
+                    <div>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold block">X POS (%)</span>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="95"
+                        value={activeField.style.x}
+                        onChange={(e) => updateActiveFieldStyle('x', Number(e.target.value))}
+                        className="w-16 px-1.5 py-1 rounded bg-white dark:bg-slate-900 border-2 border-black dark:border-slate-700 text-xs font-mono font-bold text-slate-900 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold block">Y POS (%)</span>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="95"
+                        value={activeField.style.y}
+                        onChange={(e) => updateActiveFieldStyle('y', Number(e.target.value))}
+                        className="w-16 px-1.5 py-1 rounded bg-white dark:bg-slate-900 border-2 border-black dark:border-slate-700 text-xs font-mono font-bold text-slate-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-slate-600 dark:text-slate-400 font-mono pt-0.5">
+                  ⌨️ Tip: Click box & use <span className="font-bold text-black dark:text-white">↑ ↓ ← →</span> arrow keys on keyboard. Hold <span className="font-bold text-black dark:text-white">Shift</span> for 1% step.
+                </p>
               </div>
 
               {/* Custom Text Content Textarea */}
